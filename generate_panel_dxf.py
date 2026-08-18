@@ -747,7 +747,7 @@ def plan_border(pw, ph, g11rect, g62rect, holes, win11):
     # the pieces are short enough to nest inside the 11in window.
     n = BORDER_SIDE_PIECES
     seg = vh / n
-    placed, radii, profiles, boxes = [], {}, {}, {}
+    placed, radii, profiles, boxes, desc = [], {}, {}, {}, {}
     R = PANEL_CORNER_R
 
     # Above the 11in glass the rails can be wider, because the 6.25in screen is
@@ -775,6 +775,9 @@ def plan_border(pw, ph, g11rect, g62rect, holes, win11):
             if k == n - 1:
                 tl, tr = (R, 0.0) if side == "left" else (0.0, R)
             radii[name] = (bl, br, tr, tl)
+            cname = {(1, 0, 0, 0): "bottom-left", (0, 1, 0, 0): "bottom-right",
+                     (0, 0, 1, 0): "top-right", (0, 0, 0, 1): "top-left"}.get(
+                        tuple(1 if r else 0 for r in radii[name]), None)
             y0 = vy + k * seg
             if steps and hi > lo:
                 profiles[name] = prof_step(lo, hi, seg, y_step - k * seg,
@@ -782,9 +785,21 @@ def plan_border(pw, ph, g11rect, g62rect, holes, win11):
                 lx = 0.0 if side == "left" else pw - lo
                 boxes[name] = [(lx, y0, lo, y_step - y0),
                                (bx, y_step, hi, y0 + seg - y_step)]
+                desc[name] = (
+                    f"STEPPED, not a rectangle.\n"
+                    f"             {lo:.2f} wide for the first {y_step - y0:.2f} "
+                    f"of its length, then {hi:.2f} wide for the\n"
+                    f"             remaining {y0 + seg - y_step:.2f}. The step is "
+                    f"on the INNER edge; the outer edge\n"
+                    f"             is straight."
+                    + (f" R{PANEL_CORNER_R:.1f} on the {cname} corner."
+                       if cname else ""))
             else:
                 profiles[name] = prof_rect(bw, seg, radii[name])
                 boxes[name] = [(bx, y0, bw, seg)]
+                desc[name] = ("plain rectangle"
+                              + (f", R{PANEL_CORNER_R:.1f} on the {cname} corner."
+                                 if cname else "."))
     width["upper left"], width["upper right"] = upper["left"], upper["right"]
     avail["upper left"], avail["upper right"] = gx2, pw - (gx2 + gw2)
     actual_clear["upper left"] = gx2 - upper["left"]
@@ -799,6 +814,7 @@ def plan_border(pw, ph, g11rect, g62rect, holes, win11):
         radii[nm] = (0.0, 0.0, 0.0, 0.0)
         profiles[nm] = prof_rect(bw, bh, radii[nm])
         boxes[nm] = [(bx_, by_, bw, bh)]
+        desc[nm] = "plain rectangle, square corners."
     if BORDER_MID_BAR:
         # Sits centred in the air gap between the two screens.
         gap_lo, gap_hi = gy1 + gh1, gy2           # 11in glass top, 6.25in bottom
@@ -808,6 +824,7 @@ def plan_border(pw, ph, g11rect, g62rect, holes, win11):
         radii["mid bar"] = (0.0, 0.0, 0.0, 0.0)
         profiles["mid bar"] = prof_rect(uw, mid_w, radii["mid bar"])
         boxes["mid bar"] = [(ux, gap_lo + BORDER_MID_CLEAR, uw, mid_w)]
+        desc["mid bar"] = "plain rectangle, square corners."
         width["mid"] = mid_w
         avail["mid"] = gap_hi - gap_lo
         actual_clear["mid"] = (gap_hi - gap_lo - mid_w) / 2
@@ -868,7 +885,7 @@ def plan_border(pw, ph, g11rect, g62rect, holes, win11):
 
     return dict(width=width, capped=capped, avail=avail, placed=placed,
                 clear=actual_clear, radii=radii, profiles=profiles,
-                assembled=assembled, boxes=boxes,
+                assembled=assembled, boxes=boxes, desc=desc,
                 strip_holes=strip_holes, nested=nested, sheet=(pw, ph),
                 nest_used=used_w, nest_room=ww - 2 * marg)
 
@@ -878,13 +895,14 @@ ASUS ROG GT502, aluminium front panel with two touchscreen cutouts
 
 DXF FILE   : {dxf}
 MATERIAL   : Aluminium sheet, 3.0 mm thickness
-QUANTITY   : 1 off of everything on the sheet - the panel plus the 4 back
-             stiffener strips nested beside it. ONE cutting job.
+QUANTITY   : 1 off of everything on the sheet - the panel plus the {np} back
+             stiffener pieces nested inside its large window. ONE cutting job,
+             {ntot} parts delivered in total.
 PROCESS    : Laser cut (fibre) or waterjet
 UNITS      : Millimetres. DXF is AC1009 / R12 ASCII, $INSUNITS = 4 (mm).
-GEOMETRY   : Panel outer profile + internal cutouts, plus 6 separate
-             rectangular strips nested INSIDE the large window opening.
-             The strips are separate parts, NOT features of the panel.
+GEOMETRY   : Panel outer profile + internal cutouts, plus {np} separate
+             stiffener pieces nested INSIDE the large window opening.
+             Those pieces are separate parts, NOT features of the panel.
 TOLERANCE  : +/- 0.15 mm on all cutout sizes and positions.
 LAYERS     : Every contour in this file is a THROUGH-CUT. There is no
              engraving, scoring or rastering anywhere in the drawing, and
@@ -934,18 +952,23 @@ NOTES
   clip or latch features are included. Please cut only what is in the DXF.
 - Do not scale the drawing. All dimensions are final.
 
-BACK STIFFENER PIECES - 6 pieces, same 3 mm aluminium
+BACK STIFFENER PIECES - {np} pieces, same 3 mm aluminium
 ------------------------------------------------------------------
 These are SEPARATE PARTS nested INSIDE the large 11 inch window opening.
 That material is being removed anyway, so they use no extra sheet: total
 sheet extent stays {sheetw:.2f} x {sheeth:.2f}, the panel size.
 
-** CUT ORDER: please cut these 6 pieces BEFORE cutting the large window
+** CUT ORDER: please cut these {np} pieces BEFORE cutting the large window
    outline that surrounds them. Once the window contour is cut the slug
    they sit in drops away. **
 
-Sizes below are as drawn. They bond flat to the BACK of the panel and are
-not visible in the finished build.
+** CUT EVERY PIECE EXACTLY AS DRAWN. Do not simplify any of them to a
+   plain rectangle. {nr} of the {np} have a rounded corner, and {ns} of
+   those are STEPPED (wider along part of their length). The sizes quoted
+   below are BOUNDING sizes - the true outline is in the DXF geometry. **
+
+They bond flat to the BACK of the panel and are not visible in the
+finished build.
 
 {striplist}
 
@@ -979,11 +1002,17 @@ def write_spec(path, dxf_name, b, extra_windows=0, word=None):
         gap=b["gap"], above=ph - b["y62"] - b["c62"][1],
         hdia=HOLE_DIA, hn=len(b["holes"]), wdx=WIN_DX,
         sheetw=b["border"]["sheet"][0], sheeth=b["border"]["sheet"][1],
-        striplist="\n".join(
-            f"   {name:<15s} {nw:>7.2f} W x {nh:>7.2f} H"
+        np=len(b["border"]["nested"]), ntot=1 + len(b["border"]["nested"]),
+        nr=sum(1 for r in b["border"]["radii"].values() if any(r)),
+        ns=sum(1 for d in b["border"]["desc"].values() if "STEPPED" in d),
+        striplist="\n\n".join(
+            f"   {name.upper():<16s} bounding size {nw:.2f} W x {nh:.2f} H"
             f"   drawn at X {nx:.2f}, Y {ny:.2f}"
-            + ("".join(f"\n                   hole at X {hx:.2f}, Y {hy:.2f}"
-                       for hx, hy in hs) or "\n                   no holes")
+            f"\n      shape: {b['border']['desc'][name]}"
+            + (f"\n      NOTE: drawn rotated 90 deg from how it is fitted."
+               if rot else "")
+            + ("".join(f"\n      hole at X {hx:.2f}, Y {hy:.2f}"
+                       for hx, hy in hs) or "\n      no holes")
             for name, nx, ny, nw, nh, rot, hs in b["border"]["nested"]),
         holelist="\n".join(
             f"   {name:<13s} X {hx:>7.2f} , Y {hy:>7.2f}"

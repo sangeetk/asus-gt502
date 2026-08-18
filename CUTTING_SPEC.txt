@@ -4,13 +4,14 @@ ASUS ROG GT502, aluminium front panel with two touchscreen cutouts
 
 DXF FILE   : GT502_front_panel_194x384_both_screens.dxf
 MATERIAL   : Aluminium sheet, 3.0 mm thickness
-QUANTITY   : 1 off of everything on the sheet - the panel plus the 4 back
-             stiffener strips nested beside it. ONE cutting job.
+QUANTITY   : 1 off of everything on the sheet - the panel plus the 7 back
+             stiffener pieces nested inside its large window. ONE cutting job,
+             8 parts delivered in total.
 PROCESS    : Laser cut (fibre) or waterjet
 UNITS      : Millimetres. DXF is AC1009 / R12 ASCII, $INSUNITS = 4 (mm).
-GEOMETRY   : Panel outer profile + internal cutouts, plus 6 separate
-             rectangular strips nested INSIDE the large window opening.
-             The strips are separate parts, NOT features of the panel.
+GEOMETRY   : Panel outer profile + internal cutouts, plus 7 separate
+             stiffener pieces nested INSIDE the large window opening.
+             Those pieces are separate parts, NOT features of the panel.
 TOLERANCE  : +/- 0.15 mm on all cutout sizes and positions.
 LAYERS     : Every contour in this file is a THROUGH-CUT. There is no
              engraving, scoring or rastering anywhere in the drawing, and
@@ -63,35 +64,62 @@ NOTES
   clip or latch features are included. Please cut only what is in the DXF.
 - Do not scale the drawing. All dimensions are final.
 
-BACK STIFFENER PIECES - 6 pieces, same 3 mm aluminium
+BACK STIFFENER PIECES - 7 pieces, same 3 mm aluminium
 ------------------------------------------------------------------
 These are SEPARATE PARTS nested INSIDE the large 11 inch window opening.
 That material is being removed anyway, so they use no extra sheet: total
 sheet extent stays 194.00 x 384.00, the panel size.
 
-** CUT ORDER: please cut these 6 pieces BEFORE cutting the large window
+** CUT ORDER: please cut these 7 pieces BEFORE cutting the large window
    outline that surrounds them. Once the window contour is cut the slug
    they sit in drops away. **
 
-Sizes below are as drawn. They bond flat to the BACK of the panel and are
-not visible in the finished build.
+** CUT EVERY PIECE EXACTLY AS DRAWN. Do not simplify any of them to a
+   plain rectangle. 4 of the 7 have a rounded corner, and 2 of
+   those are STEPPED (wider along part of their length). The sizes quoted
+   below are BOUNDING sizes - the true outline is in the DXF geometry. **
 
-   left strip A      17.00 W x  192.00 H   drawn at X 28.39, Y 32.81
-                   no holes
-   left strip B      20.00 W x  192.00 H   drawn at X 49.39, Y 32.81
-                   no holes
-   right strip A     11.00 W x  192.00 H   drawn at X 73.39, Y 32.81
-                   no holes
-   right strip B     14.00 W x  192.00 H   drawn at X 88.39, Y 32.81
-                   no holes
-   top strip         24.50 W x  160.00 H   drawn at X 106.39, Y 32.81
-                   hole at X 13.00, Y 43.00
-                   hole at X 13.00, Y 114.00
-   bottom strip      21.50 W x  166.00 H   drawn at X 134.89, Y 32.81
-                   hole at X 5.50, Y 13.00
-                   hole at X 5.50, Y 147.00
-   mid bar            8.50 W x  160.00 H   drawn at X 160.39, Y 32.81
-                   no holes
+They bond flat to the BACK of the panel and are not visible in the
+finished build.
+
+   LEFT STRIP A     bounding size 17.00 W x 192.00 H   drawn at X 28.39, Y 32.81
+      shape: plain rectangle, R3.0 on the bottom-left corner.
+      no holes
+
+   LEFT STRIP B     bounding size 20.00 W x 192.00 H   drawn at X 49.39, Y 32.81
+      shape: STEPPED, not a rectangle.
+             17.00 wide for the first 83.74 of its length, then 20.00 wide for the
+             remaining 108.26. The step is on the INNER edge; the outer edge
+             is straight. R3.0 on the top-left corner.
+      no holes
+
+   RIGHT STRIP A    bounding size 11.00 W x 192.00 H   drawn at X 73.39, Y 32.81
+      shape: plain rectangle, R3.0 on the bottom-right corner.
+      no holes
+
+   RIGHT STRIP B    bounding size 14.00 W x 192.00 H   drawn at X 88.39, Y 32.81
+      shape: STEPPED, not a rectangle.
+             11.00 wide for the first 83.74 of its length, then 14.00 wide for the
+             remaining 108.26. The step is on the INNER edge; the outer edge
+             is straight. R3.0 on the top-right corner.
+      no holes
+
+   TOP STRIP        bounding size 24.50 W x 160.00 H   drawn at X 106.39, Y 32.81
+      shape: plain rectangle, square corners.
+      NOTE: drawn rotated 90 deg from how it is fitted.
+      hole at X 13.00, Y 43.00
+      hole at X 13.00, Y 114.00
+
+   BOTTOM STRIP     bounding size 21.50 W x 166.00 H   drawn at X 134.89, Y 32.81
+      shape: plain rectangle, square corners.
+      NOTE: drawn rotated 90 deg from how it is fitted.
+      hole at X 5.50, Y 13.00
+      hole at X 5.50, Y 147.00
+
+   MID BAR          bounding size 8.50 W x 160.00 H   drawn at X 160.39, Y 32.81
+      shape: plain rectangle, square corners.
+      NOTE: drawn rotated 90 deg from how it is fitted.
+      no holes
 
 Strip hole positions are offsets from that strip's own lower-left corner
 and match the panel holes, so one screw passes through both layers.
