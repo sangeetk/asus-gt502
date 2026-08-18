@@ -163,6 +163,19 @@ def text_polys(word, cx, baseline, cap_h=None):
         xd += w + TRACKING_D
     return polys, total_d * sc
 
+# ------------------------------------------------------------ back border layer
+# A second 3 mm layer bonded to the BACK of the panel purely as a stiffener.
+# Four strips around the edge. The screens bond to the panel's own cutouts, so
+# every strip must stay clear of the screen GLASS footprint by BORDER_CLEAR -
+# a strip under the glass would sit the screen on a 3 mm step and tilt it.
+#
+# Requested widths. Each is capped at what the back face actually leaves free,
+# so a later nudge of the windows narrows a strip (and says so) instead of
+# quietly fouling a screen.
+BORDER_REQ = {"left": 12.0, "right": 12.0, "top": 20.0, "bottom": 22.0}
+BORDER_CLEAR = 1.0       # minimum air between a strip and the screen glass
+BORDER_NEST_GAP = 10.0   # spacing between pieces in the cutting layout
+
 # ---------------------------------------------------------------- screen specs
 SCREEN_11 = dict(name="11in", glass=(165.22, 253.67), active=(148.02, 236.47),
                  bezel=(8.60, 8.60))   # (horizontal, vertical) as mounted PORTRAIT
@@ -244,12 +257,14 @@ class Dxf:
 
 
 # ------------------------------------------------------------------ SVG preview
-def svg(path, pw, ph, cutouts, refs, title, letters=(), holes=()):
+def svg(path, pw, ph, cutouts, refs, title, letters=(), holes=(),
+        parts=(), ghosts=(), canvas=None):
     pad = 20
-    s = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{pw+2*pad}" '
-         f'height="{ph+2*pad}" viewBox="0 0 {pw+2*pad} {ph+2*pad}">',
+    cw, chh = canvas or (pw, ph)
+    s = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{cw+2*pad}" '
+         f'height="{chh+2*pad}" viewBox="0 0 {cw+2*pad} {chh+2*pad}">',
          f'<rect width="100%" height="100%" fill="#f4f4f5"/>',
-         f'<g transform="translate({pad},{pad}) scale(1,-1) translate(0,{-ph})">',
+         f'<g transform="translate({pad},{pad}) scale(1,-1) translate(0,{-chh})">',
          f'<rect x="0" y="0" width="{pw}" height="{ph}" rx="3" '
          f'fill="#c8ccd0" stroke="#3f3f46" stroke-width="0.8"/>']
     for x, y, w, h, r in cutouts:
@@ -262,12 +277,22 @@ def svg(path, pw, ph, cutouts, refs, title, letters=(), holes=()):
     for hx, hy, hd in holes:
         s.append(f'<circle cx="{hx:.3f}" cy="{hy:.3f}" r="{hd/2:.3f}" '
                  f'fill="#f4f4f5" stroke="#dc2626" stroke-width="0.8"/>')
+    for x, y, w, h in ghosts:      # where the strips end up, behind the panel
+        s.append(f'<rect x="{x:.3f}" y="{y:.3f}" width="{w:.3f}" height="{h:.3f}" '
+                 f'fill="#9aa0a6" fill-opacity="0.35" stroke="#5f6368" '
+                 f'stroke-width="0.5" stroke-dasharray="4 2"/>')
+    for x, y, w, h, phs in parts:  # the same strips, nested for cutting
+        s.append(f'<rect x="{x:.3f}" y="{y:.3f}" width="{w:.3f}" height="{h:.3f}" '
+                 f'fill="#c8ccd0" stroke="#3f3f46" stroke-width="0.8"/>')
+        for hx, hy in phs:
+            s.append(f'<circle cx="{x+hx:.3f}" cy="{y+hy:.3f}" r="{HOLE_DIA/2:.3f}" '
+                     f'fill="#f4f4f5" stroke="#dc2626" stroke-width="0.8"/>')
     for x, y, w, h, colour, dash in refs:
         s.append(f'<rect x="{x:.3f}" y="{y:.3f}" width="{w:.3f}" height="{h:.3f}" '
                  f'fill="none" stroke="{colour}" stroke-width="0.6" '
                  f'stroke-dasharray="{dash}"/>')
     s += ['</g>',
-          f'<text x="{pad}" y="{ph+2*pad-6}" font-family="sans-serif" '
+          f'<text x="{pad}" y="{chh+2*pad-6}" font-family="sans-serif" '
           f'font-size="9" fill="#3f3f46">{title}</text>',
           '</svg>']
     with open(path, "w") as f:
@@ -463,8 +488,18 @@ def build_both(out_dxf, out_svg, out_print, panel_h=None, cut_gap=5.0,
         for poly in letters:
             d.polygon("CUTOUT", poly)
 
+    bd = plan_border(PANEL_W, ph,
+                     (x11 - ins11[0], y11 - ins11[2]) + SCREEN_11["glass"],
+                     (x62 - ins625[0], y62 - ins625[2]) + SCREEN_625["glass"],
+                     holes)
+    d.layer("BORDER_STRIP", 3)
+    for name, nx, ny, nw, nh in bd["nested"]:
+        d.rounded_rect("BORDER_STRIP", nx, ny, nw, nh, 0.001)
+        for hxo, hyo in bd["strip_holes"][name]:
+            d.circle("CUTOUT", nx + hxo, ny + hyo, HOLE_DIA)
+
     with open(out_dxf, "w") as f:
-        f.write(d.dumps((PANEL_W, ph)))
+        f.write(d.dumps(bd["sheet"]))
 
     g11w, g11h = SCREEN_11["glass"]
     a11w, a11h = SCREEN_11["active"]
@@ -484,8 +519,14 @@ def build_both(out_dxf, out_svg, out_print, panel_h=None, cut_gap=5.0,
         f"{PANEL_W:.0f} x {ph:.0f} - 6.25in landscape top, 11in portrait below. "
         f"cutouts {cw62:.2f}x{ch62:.2f} and {cw11:.2f}x{ch11:.2f}, "
         f"gap {cut_gap:.1f} (glass gap {glass_gap:.1f})"
-        + (f", text \"{word}\" {CAP_H:.0f} mm caps" if word else ""),
-        letters=letters, holes=svg_holes)
+        + (f", text \"{word}\" {CAP_H:.0f} mm caps" if word else "")
+        + f". Plus {len(bd['nested'])} back stiffener strips nested at right/top "
+          "(grey dashed = where they bond behind the panel).",
+        letters=letters, holes=svg_holes,
+        parts=[(nx, ny, nw, nh, bd["strip_holes"][n])
+               for n, nx, ny, nw, nh in bd["nested"]],
+        ghosts=[(sx, sy, sw, sh) for _, sx, sy, sw, sh in bd["placed"]],
+        canvas=bd["sheet"])
 
     svg_1to1(out_print, PANEL_W, ph, cutouts, refs, [
         f"GT502 front panel, 3 mm aluminium - {PANEL_W:.0f} x {ph:.0f} mm",
@@ -501,9 +542,97 @@ def build_both(out_dxf, out_svg, out_print, panel_h=None, cut_gap=5.0,
                 overflow=overflow, glass_span=glass_span,
                 y11=y11, y62=y62, x11=x11, x62=x62,
                 band=band, glass_top=glass_top, word=word, holes=holes,
+                border=bd,
+                g11rect=(x11 - ins11[0], y11 - ins11[2], g11w, g11h),
+                g62rect=(x62 - ins625[0], y62 - ins625[2], g62w, g62h),
                 text_w=text_w, baseline=baseline, n_letters=len(letters),
                 bridged=", ".join(c for c in BRIDGED if word and c in word))
 
+
+
+def plan_border(pw, ph, g11rect, g62rect, holes):
+    """Work out the four back stiffener strips. Pure geometry - writes nothing.
+
+    The strips are nested into the MAIN dxf so the whole build comes off one
+    sheet as one cutting job. Returns both their assembled positions (for the
+    clearance check) and their nested positions (what actually gets cut).
+    """
+    gx1, gy1, gw1, gh1 = g11rect               # 11in glass footprint
+    gx2, gy2, gw2, gh2 = g62rect               # 6.25in glass footprint
+
+    # Free back-face margin on each edge = distance from the sheet edge to the
+    # nearest glass, taking whichever screen comes closer.
+    avail = {
+        "left":   min(gx1, gx2),
+        "right":  min(pw - (gx1 + gw1), pw - (gx2 + gw2)),
+        "bottom": gy1,
+        "top":    ph - (gy2 + gh2),
+    }
+    width, capped = {}, {}
+    for edge, req in BORDER_REQ.items():
+        room = avail[edge] - BORDER_CLEAR
+        width[edge] = min(req, math.floor(room))
+        if width[edge] < req:
+            capped[edge] = (req, width[edge], avail[edge])
+
+    # Verticals run the full height between the panel's corner radii, so their
+    # square ends stop exactly on the arc tangents and nothing juts past the
+    # rounded corner. Horizontals butt between them.
+    vy, vh = PANEL_CORNER_R, ph - 2 * PANEL_CORNER_R
+    hx = width["left"]
+    hw = pw - width["left"] - width["right"]
+
+    placed = [
+        ("left strip",   0.0,                  vy,               width["left"],  vh),
+        ("right strip",  pw - width["right"],   vy,               width["right"], vh),
+        ("top strip",    hx,   ph - width["top"],                 hw, width["top"]),
+        ("bottom strip", hx,   0.0,                               hw, width["bottom"]),
+    ]
+
+    # Which holes land in which strip, as offsets inside that strip.
+    strip_holes = {}
+    for name, sx, sy, sw, sh in placed:
+        hits = [(x - sx, y - sy) for x, y in holes
+                if sx <= x <= sx + sw and sy <= y <= sy + sh]
+        strip_holes[name] = hits
+
+    # No strip may touch either glass footprint.
+    for name, sx, sy, sw, sh in placed:
+        for gx, gy, gw, gh in (g11rect, g62rect):
+            clear = (sx + sw <= gx or sx >= gx + gw
+                     or sy + sh <= gy or sy >= gy + gh)
+            assert clear, f"{name} overlaps a screen glass footprint"
+    # Every hole must end up in exactly one strip, or a screw has nothing to pass through.
+    assert sum(len(v) for v in strip_holes.values()) == len(holes), \
+        "a mounting hole falls outside every strip"
+
+    # ---- nest the pieces onto the same sheet as the panel ----
+    # Verticals go in a column to the right of the panel, horizontals above it.
+    # Nothing may overlap the panel or another piece.
+    nested = []
+    cx = pw + BORDER_NEST_GAP
+    for name, _, _, sw, sh in placed[:2]:                 # the two verticals
+        nested.append((name, cx, 0.0, sw, sh))
+        cx += sw + BORDER_NEST_GAP
+    cy = ph + BORDER_NEST_GAP
+    for name, _, _, sw, sh in placed[2:]:                 # the two horizontals
+        nested.append((name, 0.0, cy, sw, sh))
+        cy += sh + BORDER_NEST_GAP
+
+    sheet = (max([cx - BORDER_NEST_GAP] + [x + w for _, x, _, w, _ in nested]),
+             max([cy - BORDER_NEST_GAP] + [y + h for _, _, y, _, h in nested]))
+
+    boxes = [("panel", 0.0, 0.0, pw, ph)] + [(n, x, y, w, h) for n, x, y, w, h in nested]
+    for i in range(len(boxes)):
+        for j in range(i + 1, len(boxes)):
+            _, ax, ay, aw, ah = boxes[i]
+            _, bx, by, bw, bh = boxes[j]
+            apart = (ax + aw <= bx or bx + bw <= ax
+                     or ay + ah <= by or by + bh <= ay)
+            assert apart, f"nested {boxes[i][0]} overlaps {boxes[j][0]}"
+
+    return dict(width=width, capped=capped, avail=avail, placed=placed,
+                strip_holes=strip_holes, nested=nested, sheet=sheet)
 
 SPEC = """CUSTOM FRONT PANEL - CUTTING SPECIFICATION
 ASUS ROG GT502, aluminium front panel with two touchscreen cutouts
@@ -511,11 +640,13 @@ ASUS ROG GT502, aluminium front panel with two touchscreen cutouts
 
 DXF FILE   : {dxf}
 MATERIAL   : Aluminium sheet, 3.0 mm thickness
-QUANTITY   : 1 off
+QUANTITY   : 1 off of everything on the sheet - the panel plus the 4 back
+             stiffener strips nested beside it. ONE cutting job.
 PROCESS    : Laser cut (fibre) or waterjet
 UNITS      : Millimetres. DXF is AC1009 / R12 ASCII, $INSUNITS = 4 (mm).
-GEOMETRY   : {contours} closed contours - 1 outer profile + all others
-             are internal cutouts.
+GEOMETRY   : Panel outer profile + internal cutouts, plus 4 separate
+             rectangular strips nested to the right of and above the panel.
+             The strips are separate parts, NOT features of the panel.
 TOLERANCE  : +/- 0.15 mm on all cutout sizes and positions.
 KERF       : Geometry is NOMINAL. Please apply your own kerf compensation so
              the finished part matches the drawing: outer profile cut on the
@@ -554,6 +685,18 @@ NOTES
 - The {hn} mounting holes above are the only fixings in this drawing. No
   clip or latch features are included. Please cut only what is in the DXF.
 - Do not scale the drawing. All dimensions are final.
+
+BACK STIFFENER STRIPS - 4 pieces, same 3 mm aluminium
+------------------------------------------------------------------
+Nested to the right of and above the panel on the same sheet. They are
+separate parts that bond flat to the BACK of the panel; they are not
+visible in the finished build. Total sheet extent {sheetw:.2f} x {sheeth:.2f}.
+
+{striplist}
+
+Strip hole positions are offsets from that strip's own lower-left corner
+and match the panel holes, so one screw passes through both layers.
+Deburr both faces - these bond flat against the panel.
 """
 
 
@@ -580,6 +723,14 @@ def write_spec(path, dxf_name, b, extra_windows=0, word=None):
         c11w=b["c11"][0], c11h=b["c11"][1], x11=b["x11"], y11=b["y11"],
         gap=b["gap"], above=ph - b["y62"] - b["c62"][1],
         hdia=HOLE_DIA, hn=len(b["holes"]), wdx=WIN_DX,
+        sheetw=b["border"]["sheet"][0], sheeth=b["border"]["sheet"][1],
+        striplist="\n".join(
+            f"   {name:<14s} {nw:>7.2f} W x {nh:>7.2f} H"
+            f"   nested at X {nx:.2f}, Y {ny:.2f}"
+            + ("".join(f"\n                  hole at X {hx:.2f}, Y {hy:.2f}"
+                       for hx, hy in b["border"]["strip_holes"][name])
+               or "\n                  no holes")
+            for name, nx, ny, nw, nh in b["border"]["nested"]),
         holelist="\n".join(
             f"   {name:<13s} X {hx:>7.2f} , Y {hy:>7.2f}"
             f"   ({xd:.2f} from {xe}, {yd:.2f} from {ye})"
@@ -628,6 +779,23 @@ if __name__ == "__main__":
     report("plain", b)
     if not b["overflow"]:
         write_spec(p("CUTTING_SPEC.txt"), base + ".dxf", b)
+
+    bd = b["border"]
+    print("\n=== back stiffener strips (nested on the same sheet) ===")
+    for edge in ("left", "right", "top", "bottom"):
+        w = bd["width"][edge]
+        note = ""
+        if edge in bd["capped"]:
+            req, got, av = bd["capped"][edge]
+            note = f"  <-- REDUCED from {req:.0f} (only {av:.2f} free)"
+        print(f"  {edge:<7s} width {w:6.2f}   free {bd['avail'][edge]:6.2f}{note}")
+    print()
+    for (name, sx, sy, sw, sh), (_, nx, ny, _, _) in zip(bd["placed"], bd["nested"]):
+        print(f"  {name:<14s} {sw:7.2f} x {sh:7.2f}"
+              f"   bonds at ({sx:.2f}, {sy:.2f})"
+              f"   nested at ({nx:.2f}, {ny:.2f})"
+              f"   holes: {len(bd['strip_holes'][name])}")
+    print(f"  sheet extent needed  {bd['sheet'][0]:.2f} x {bd['sheet'][1]:.2f}")
 
     if not WORD:
         print()

@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="234.0" height="424.0" viewBox="0 0 234.0 424.0">
+<svg xmlns="http://www.w3.org/2000/svg" width="276.0" height="484.0" viewBox="0 0 276.0 484.0">
 <rect width="100%" height="100%" fill="#f4f4f5"/>
-<g transform="translate(20,20) scale(1,-1) translate(0,-384.0)">
+<g transform="translate(20,20) scale(1,-1) translate(0,-444.0)">
 <rect x="0" y="0" width="194.0" height="384.0" rx="3" fill="#c8ccd0" stroke="#3f3f46" stroke-width="0.8"/>
 <rect x="23.390" y="27.815" width="153.220" height="241.670" rx="2.0" fill="#f4f4f5" stroke="#dc2626" stroke-width="0.8"/>
 <rect x="26.410" y="287.485" width="147.180" height="68.700" rx="2.0" fill="#f4f4f5" stroke="#dc2626" stroke-width="0.8"/>
@@ -8,10 +8,22 @@
 <circle cx="134.000" cy="371.000" r="1.600" fill="#f4f4f5" stroke="#dc2626" stroke-width="0.8"/>
 <circle cx="30.000" cy="16.000" r="1.600" fill="#f4f4f5" stroke="#dc2626" stroke-width="0.8"/>
 <circle cx="164.000" cy="16.000" r="1.600" fill="#f4f4f5" stroke="#dc2626" stroke-width="0.8"/>
+<rect x="0.000" y="3.000" width="12.000" height="378.000" fill="#9aa0a6" fill-opacity="0.35" stroke="#5f6368" stroke-width="0.5" stroke-dasharray="4 2"/>
+<rect x="184.000" y="3.000" width="10.000" height="378.000" fill="#9aa0a6" fill-opacity="0.35" stroke="#5f6368" stroke-width="0.5" stroke-dasharray="4 2"/>
+<rect x="12.000" y="364.000" width="172.000" height="20.000" fill="#9aa0a6" fill-opacity="0.35" stroke="#5f6368" stroke-width="0.5" stroke-dasharray="4 2"/>
+<rect x="12.000" y="0.000" width="172.000" height="20.000" fill="#9aa0a6" fill-opacity="0.35" stroke="#5f6368" stroke-width="0.5" stroke-dasharray="4 2"/>
+<rect x="204.000" y="0.000" width="12.000" height="378.000" fill="#c8ccd0" stroke="#3f3f46" stroke-width="0.8"/>
+<rect x="226.000" y="0.000" width="10.000" height="378.000" fill="#c8ccd0" stroke="#3f3f46" stroke-width="0.8"/>
+<rect x="0.000" y="394.000" width="172.000" height="20.000" fill="#c8ccd0" stroke="#3f3f46" stroke-width="0.8"/>
+<circle cx="51.000" cy="401.000" r="1.600" fill="#f4f4f5" stroke="#dc2626" stroke-width="0.8"/>
+<circle cx="122.000" cy="401.000" r="1.600" fill="#f4f4f5" stroke="#dc2626" stroke-width="0.8"/>
+<rect x="0.000" y="424.000" width="172.000" height="20.000" fill="#c8ccd0" stroke="#3f3f46" stroke-width="0.8"/>
+<circle cx="18.000" cy="440.000" r="1.600" fill="#f4f4f5" stroke="#dc2626" stroke-width="0.8"/>
+<circle cx="152.000" cy="440.000" r="1.600" fill="#f4f4f5" stroke="#dc2626" stroke-width="0.8"/>
 <rect x="17.390" y="21.815" width="165.220" height="253.670" fill="none" stroke="#2563eb" stroke-width="0.6" stroke-dasharray="3 2"/>
 <rect x="20.410" y="284.485" width="159.180" height="74.700" fill="none" stroke="#2563eb" stroke-width="0.6" stroke-dasharray="3 2"/>
 <rect x="22.990" y="30.415" width="148.020" height="236.470" fill="none" stroke="#16a34a" stroke-width="0.6" stroke-dasharray="1 1"/>
 <rect x="24.910" y="288.535" width="144.180" height="66.600" fill="none" stroke="#16a34a" stroke-width="0.6" stroke-dasharray="1 1"/>
 </g>
-<text x="20" y="418.0" font-family="sans-serif" font-size="9" fill="#3f3f46">194 x 384 - 6.25in landscape top, 11in portrait below. cutouts 147.18x68.70 and 153.22x241.67, gap 18.0 (glass gap 9.0)</text>
+<text x="20" y="478.0" font-family="sans-serif" font-size="9" fill="#3f3f46">194 x 384 - 6.25in landscape top, 11in portrait below. cutouts 147.18x68.70 and 153.22x241.67, gap 18.0 (glass gap 9.0). Plus 4 back stiffener strips nested at right/top (grey dashed = where they bond behind the panel).</text>
 </svg>
