@@ -78,19 +78,19 @@ not visible in the finished build.
 
    left strip A      17.00 W x  192.00 H   drawn at X 28.39, Y 32.81
                    no holes
-   left strip B      17.00 W x  192.00 H   drawn at X 50.39, Y 32.81
+   left strip B      20.00 W x  192.00 H   drawn at X 49.39, Y 32.81
                    no holes
-   right strip A     11.00 W x  192.00 H   drawn at X 72.39, Y 32.81
+   right strip A     11.00 W x  192.00 H   drawn at X 73.39, Y 32.81
                    no holes
-   right strip B     11.00 W x  192.00 H   drawn at X 88.39, Y 32.81
+   right strip B     14.00 W x  192.00 H   drawn at X 88.39, Y 32.81
                    no holes
-   top strip         24.50 W x  166.00 H   drawn at X 104.39, Y 32.81
-                   hole at X 13.00, Y 46.00
-                   hole at X 13.00, Y 117.00
-   bottom strip      21.50 W x  166.00 H   drawn at X 133.89, Y 32.81
+   top strip         24.50 W x  160.00 H   drawn at X 106.39, Y 32.81
+                   hole at X 13.00, Y 43.00
+                   hole at X 13.00, Y 114.00
+   bottom strip      21.50 W x  166.00 H   drawn at X 134.89, Y 32.81
                    hole at X 5.50, Y 13.00
                    hole at X 5.50, Y 147.00
-   mid bar            8.50 W x  166.00 H   drawn at X 160.39, Y 32.81
+   mid bar            8.50 W x  160.00 H   drawn at X 160.39, Y 32.81
                    no holes
 
 Strip hole positions are offsets from that strip's own lower-left corner

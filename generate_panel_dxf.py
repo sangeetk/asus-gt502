@@ -184,7 +184,7 @@ BORDER_REQ = {"left": 17.0, "right": 11.0, "top": 24.5, "bottom": 21.5}
 # bottom edge (21.815) and locates it. It must never exceed that figure: a strip
 # under the glass sits the screen on a 3 mm step and tilts the display.
 BORDER_CLEAR = {"left": 0.35, "right": 0.35, "top": 0.3, "bottom": 0.3}
-BORDER_NEST_GAP = 5.0    # spacing between nested pieces
+BORDER_NEST_GAP = 4.0    # spacing between nested pieces
 BORDER_WIN_MARGIN = 5.0  # margin from the 11in window edge to the nested pieces
 
 # A 7th piece: a bar in the gap between the two screens. It gives the 6.25in
@@ -272,6 +272,17 @@ class Dxf:
         out += ["0", "SEQEND", "8", layer]
         self.ents += out
 
+    def profile(self, layer, verts, ox=0.0, oy=0.0):
+        """Closed polyline from a [(x, y, bulge)] profile, offset to (ox, oy)."""
+        out = ["0", "POLYLINE", "8", layer, "66", "1", "70", "1",
+               "10", "0.0", "20", "0.0", "30", "0.0"]
+        for x, y, bg in verts:
+            out += ["0", "VERTEX", "8", layer,
+                    "10", f"{ox + x:.4f}", "20", f"{oy + y:.4f}", "30", "0.0",
+                    "42", f"{bg:.10f}"]
+        out += ["0", "SEQEND", "8", layer]
+        self.ents += out
+
     def polygon(self, layer, pts):
         """Closed polyline through pts, straight segments, forced CCW."""
         pts = ccw(pts)
@@ -345,6 +356,62 @@ def svg_corner_path(x0, y0, w, h, radii):
         d.append(f"L {x0:.3f},{y0:.3f}")
     return " ".join(d) + " Z"
 
+
+def prof_rect(w, h, radii):
+    """Vertex list [(x, y, bulge)] for a rectangle with per-corner radii."""
+    b, (r_bl, r_br, r_tr, r_tl) = BULGE_90, radii
+    v = [(r_bl, 0.0, 0.0) if r_bl else (0.0, 0.0, 0.0)]
+    v += [(w - r_br, 0.0, b), (w, r_br, 0.0)] if r_br else [(w, 0.0, 0.0)]
+    v += [(w, h - r_tr, b), (w - r_tr, h, 0.0)] if r_tr else [(w, h, 0.0)]
+    v += [(r_tl, h, b), (0.0, h - r_tl, 0.0)] if r_tl else [(0.0, h, 0.0)]
+    if r_bl:
+        v.append((0.0, r_bl, b))
+    return v
+
+
+def prof_step(w_lo, w_hi, h, y_step, r_top, mirror):
+    """Vertex list for a side rail that steps wider above y_step.
+
+    Narrow (w_lo) alongside the tall screen, wide (w_hi) above it. r_top rounds
+    the outer top corner. mirror=True builds the right-hand piece, whose outer
+    edge is at x = w_hi. Coordinates are relative to the bounding box.
+    """
+    b = BULGE_90
+    if not mirror:                      # outer edge at x = 0
+        v = [(0.0, 0.0, 0.0), (w_lo, 0.0, 0.0), (w_lo, y_step, 0.0),
+             (w_hi, y_step, 0.0), (w_hi, h, 0.0)]
+        v += [(r_top, h, b), (0.0, h - r_top, 0.0)] if r_top else [(0.0, h, 0.0)]
+        return v
+    o = w_hi                            # outer edge at x = w_hi
+    v = [(o, 0.0, 0.0)]
+    v += [(o, h - r_top, b), (o - r_top, h, 0.0)] if r_top else [(o, h, 0.0)]
+    v += [(0.0, h, 0.0), (0.0, y_step, 0.0),
+          (o - w_lo, y_step, 0.0), (o - w_lo, 0.0, 0.0)]
+    return v
+
+
+def rot90(verts, h):
+    """Rotate a profile 90 deg CCW. Bulges are unchanged by rotation."""
+    return [(h - y, x, bg) for x, y, bg in verts]
+
+
+def svg_path_verts(verts, ox=0.0, oy=0.0):
+    """SVG path `d` from a [(x, y, bulge)] profile, offset to (ox, oy)."""
+    pts = [(ox + x, oy + y, bg) for x, y, bg in verts]
+    d = [f"M {pts[0][0]:.3f},{pts[0][1]:.3f}"]
+    for i, (x, y, bg) in enumerate(pts):
+        nx, ny, _ = pts[(i + 1) % len(pts)]
+        if abs(bg) < 1e-9:
+            d.append(f"L {nx:.3f},{ny:.3f}")
+        else:
+            th = 4 * math.atan(bg)
+            chord = math.hypot(nx - x, ny - y)
+            r = abs(chord / (2 * math.sin(th / 2)))
+            large = 1 if abs(th) > math.pi else 0
+            sweep = 1 if bg > 0 else 0
+            d.append(f"A {r:.3f},{r:.3f} 0 {large} {sweep} {nx:.3f},{ny:.3f}")
+    return " ".join(d) + " Z"
+
 # ------------------------------------------------------------------ SVG preview
 def svg(path, pw, ph, cutouts, refs, title, letters=(), holes=(),
         parts=(), ghosts=(), canvas=None):
@@ -366,12 +433,12 @@ def svg(path, pw, ph, cutouts, refs, title, letters=(), holes=(),
     for hx, hy, hd in holes:
         s.append(f'<circle cx="{hx:.3f}" cy="{hy:.3f}" r="{hd/2:.3f}" '
                  f'fill="#f4f4f5" stroke="#dc2626" stroke-width="0.8"/>')
-    for x, y, w, h, rad in ghosts:  # where the strips end up, behind the panel
-        s.append(f'<path d="{svg_corner_path(x, y, w, h, rad)}" '
+    for x, y, vs in ghosts:        # where the strips end up, behind the panel
+        s.append(f'<path d="{svg_path_verts(vs, x, y)}" '
                  f'fill="#9aa0a6" fill-opacity="0.35" stroke="#5f6368" '
                  f'stroke-width="0.5" stroke-dasharray="4 2"/>')
-    for x, y, w, h, phs, rad in parts:  # the same strips, nested for cutting
-        s.append(f'<path d="{svg_corner_path(x, y, w, h, rad)}" '
+    for x, y, phs, vs in parts:    # the same strips, nested for cutting
+        s.append(f'<path d="{svg_path_verts(vs, x, y)}" '
                  f'fill="#c8ccd0" stroke="#dc2626" stroke-width="0.8"/>')
         for hx, hy in phs:
             s.append(f'<circle cx="{x+hx:.3f}" cy="{y+hy:.3f}" r="{HOLE_DIA/2:.3f}" '
@@ -584,7 +651,7 @@ def build_both(out_dxf, out_svg, out_print, panel_h=None, cut_gap=5.0,
                      (x62 - ins625[0], y62 - ins625[2]) + SCREEN_625["glass"],
                      holes, (x11, y11, cw11, ch11))
     for name, nx, ny, nw, nh, rot, hs in bd["nested"]:
-        d.rect_corners("CUT_OUTER", nx, ny, nw, nh, bd["radii"][name])
+        d.profile("CUT_OUTER", bd["profiles"][name], nx, ny)
         for hxo, hyo in hs:
             d.circle("CUT_INNER", nx + hxo, ny + hyo, HOLE_DIA)
 
@@ -613,10 +680,10 @@ def build_both(out_dxf, out_svg, out_print, panel_h=None, cut_gap=5.0,
         + f". Plus {len(bd['nested'])} back stiffener pieces nested inside the "
           "11in window (grey dashed = where they bond behind the panel).",
         letters=letters, holes=svg_holes,
-        parts=[(nx, ny, nw, nh, hs, bd["radii"][n])
+        parts=[(nx, ny, hs, bd["profiles"][n])
                for n, nx, ny, nw, nh, _, hs in bd["nested"]],
-        ghosts=[(sx, sy, sw, sh, bd["radii"][n])
-                for n, sx, sy, sw, sh in bd["placed"]],
+        ghosts=[(sx, sy, bd["profiles"][n]) if False else
+                (sx, sy, bd["assembled"][n]) for n, sx, sy, sw, sh in bd["placed"]],
         canvas=bd["sheet"])
 
     svg_1to1(out_print, PANEL_W, ph, cutouts, refs, [
@@ -680,32 +747,67 @@ def plan_border(pw, ph, g11rect, g62rect, holes, win11):
     # the pieces are short enough to nest inside the 11in window.
     n = BORDER_SIDE_PIECES
     seg = vh / n
-    placed, radii = [], {}
+    placed, radii, profiles, boxes = [], {}, {}, {}
     R = PANEL_CORNER_R
+
+    # Above the 11in glass the rails can be wider, because the 6.25in screen is
+    # 6.04 narrower and sits 3.02 inboard on each side. The piece that spans
+    # that boundary is therefore STEPPED rather than a plain rectangle, which
+    # closes the gap to the 6.25in glass without adding any extra pieces.
+    y_step = gy1 + gh1 + BORDER_MID_CLEAR        # top of the 11in glass + air
+    upper = {"left": min(gx2, gx1 + gw1 and gx2) - BORDER_CLEAR["left"],
+             "right": (pw - (gx2 + gw2)) - BORDER_CLEAR["right"]}
+    upper = {k: math.floor(v * 10) / 10 for k, v in upper.items()}
+
     for side, sx in (("left", 0.0), ("right", pw - width["right"])):
         for k in range(n):
             name = f"{side} strip {chr(65 + k)}"
-            placed.append((name, sx, vy + k * seg, width[side], seg))
-            # (bl, br, tr, tl) - only the corner at the panel corner is rounded
+            lo = width[side]
+            hi = max(lo, upper[side])
+            steps = k * seg < y_step < (k + 1) * seg
+            bw = hi if steps or (k * seg >= y_step) else lo
+            bx = sx if side == "left" else pw - bw
+            placed.append((name, bx, vy + k * seg, bw, seg))
+
             bl = br = tr = tl = 0.0
-            if k == 0:                       # bottom-most piece
+            if k == 0:
                 bl, br = (R, 0.0) if side == "left" else (0.0, R)
-            if k == n - 1:                   # top-most piece
+            if k == n - 1:
                 tl, tr = (R, 0.0) if side == "left" else (0.0, R)
             radii[name] = (bl, br, tr, tl)
+            y0 = vy + k * seg
+            if steps and hi > lo:
+                profiles[name] = prof_step(lo, hi, seg, y_step - k * seg,
+                                           tl or tr, side == "right")
+                lx = 0.0 if side == "left" else pw - lo
+                boxes[name] = [(lx, y0, lo, y_step - y0),
+                               (bx, y_step, hi, y0 + seg - y_step)]
+            else:
+                profiles[name] = prof_rect(bw, seg, radii[name])
+                boxes[name] = [(bx, y0, bw, seg)]
+    width["upper left"], width["upper right"] = upper["left"], upper["right"]
+    avail["upper left"], avail["upper right"] = gx2, pw - (gx2 + gw2)
+    actual_clear["upper left"] = gx2 - upper["left"]
+    actual_clear["upper right"] = (pw - (gx2 + gw2)) - upper["right"]
+    ux = upper["left"]
+    uw = pw - upper["left"] - upper["right"]
     placed += [
-        ("top strip",    hx, ph - width["top"], hw, width["top"]),
+        ("top strip",    ux, ph - width["top"], uw, width["top"]),
         ("bottom strip", hx, 0.0,               hw, width["bottom"]),
     ]
-    for nm, _, _, _, _ in placed[n * 2:]:
+    for nm, bx_, by_, bw, bh in placed[n * 2:]:
         radii[nm] = (0.0, 0.0, 0.0, 0.0)
+        profiles[nm] = prof_rect(bw, bh, radii[nm])
+        boxes[nm] = [(bx_, by_, bw, bh)]
     if BORDER_MID_BAR:
         # Sits centred in the air gap between the two screens.
         gap_lo, gap_hi = gy1 + gh1, gy2           # 11in glass top, 6.25in bottom
         mid_w = (gap_hi - gap_lo) - 2 * BORDER_MID_CLEAR
         assert mid_w > 0, "no room for a mid bar between the two screens"
-        placed.append(("mid bar", hx, gap_lo + BORDER_MID_CLEAR, hw, mid_w))
+        placed.append(("mid bar", ux, gap_lo + BORDER_MID_CLEAR, uw, mid_w))
         radii["mid bar"] = (0.0, 0.0, 0.0, 0.0)
+        profiles["mid bar"] = prof_rect(uw, mid_w, radii["mid bar"])
+        boxes["mid bar"] = [(ux, gap_lo + BORDER_MID_CLEAR, uw, mid_w)]
         width["mid"] = mid_w
         avail["mid"] = gap_hi - gap_lo
         actual_clear["mid"] = (gap_hi - gap_lo - mid_w) / 2
@@ -718,11 +820,13 @@ def plan_border(pw, ph, g11rect, g62rect, holes, win11):
         strip_holes[name] = hits
 
     # No strip may touch either glass footprint.
-    for name, sx, sy, sw, sh in placed:
-        for gx, gy, gw, gh in (g11rect, g62rect):
-            clear = (sx + sw <= gx or sx >= gx + gw
-                     or sy + sh <= gy or sy >= gy + gh)
-            assert clear, f"{name} overlaps a screen glass footprint"
+    for name, *_ in placed:
+        for sx, sy, sw, sh in boxes[name]:
+            for gx, gy, gw, gh in (g11rect, g62rect):
+                clear = (sx + sw <= gx or sx >= gx + gw
+                         or sy + sh <= gy or sy >= gy + gh)
+                assert clear, (f"{name} overlaps a screen glass footprint "
+                               f"(sub-rect {sx:.2f},{sy:.2f} {sw:.2f}x{sh:.2f})")
     # Every hole must end up in exactly one strip, or a screw has nothing to pass through.
     assert sum(len(v) for v in strip_holes.values()) == len(holes), \
         "a mounting hole falls outside every strip"
@@ -730,6 +834,7 @@ def plan_border(pw, ph, g11rect, g62rect, holes, win11):
     # ---- nest every piece inside the 11in window slug ----
     # Turn each piece long-side-vertical; a rotated piece takes its holes with
     # it, via (x, y) -> (h - y, x).
+    assembled = {}
     gap, marg = BORDER_NEST_GAP, BORDER_WIN_MARGIN
     wx, wy, ww, wh_ = win11
     cx, nested = wx + marg, []
@@ -738,6 +843,8 @@ def plan_border(pw, ph, g11rect, g62rect, holes, win11):
         nw, nh = (sh, sw) if rot else (sw, sh)
         hs = [((sh - hy), hx) if rot else (hx, hy)
               for hx, hy in strip_holes[name]]
+        assembled[name] = profiles[name]
+        profiles[name] = rot90(profiles[name], sh) if rot else profiles[name]
         nested.append((name, cx, wy + marg, nw, nh, rot, hs))
         cx += nw + gap
 
@@ -760,7 +867,8 @@ def plan_border(pw, ph, g11rect, g62rect, holes, win11):
                 f"nested {nested[i][0]} overlaps {nested[j][0]}"
 
     return dict(width=width, capped=capped, avail=avail, placed=placed,
-                clear=actual_clear, radii=radii,
+                clear=actual_clear, radii=radii, profiles=profiles,
+                assembled=assembled, boxes=boxes,
                 strip_holes=strip_holes, nested=nested, sheet=(pw, ph),
                 nest_used=used_w, nest_room=ww - 2 * marg)
 
