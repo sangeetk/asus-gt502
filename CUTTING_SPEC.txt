@@ -8,10 +8,20 @@ QUANTITY   : 1 off of everything on the sheet - the panel plus the 4 back
              stiffener strips nested beside it. ONE cutting job.
 PROCESS    : Laser cut (fibre) or waterjet
 UNITS      : Millimetres. DXF is AC1009 / R12 ASCII, $INSUNITS = 4 (mm).
-GEOMETRY   : Panel outer profile + internal cutouts, plus 4 separate
-             rectangular strips nested to the right of and above the panel.
+GEOMETRY   : Panel outer profile + internal cutouts, plus 6 separate
+             rectangular strips nested INSIDE the large window opening.
              The strips are separate parts, NOT features of the panel.
 TOLERANCE  : +/- 0.15 mm on all cutout sizes and positions.
+LAYERS     : Every contour in this file is a THROUGH-CUT. There is no
+             engraving, scoring or rastering anywhere in the drawing, and
+             nothing in it should be treated as such.
+             All geometry is drawn in ONE colour (red, ACI 1) so there is no
+             colour mapping to interpret. Two layers are used purely to say
+             which side of the line the kerf belongs on:
+               CUT_OUTER  part boundaries - panel profile and the 6 strips
+               CUT_INNER  openings - windows and all holes
+             If your workflow needs everything on a single layer, merging
+             them is fine; the layer names carry no operation meaning.
 KERF       : Geometry is NOMINAL. Please apply your own kerf compensation so
              the finished part matches the drawing: outer profile cut on the
              outside of the line, windows cut on the inside of the line.
@@ -53,22 +63,35 @@ NOTES
   clip or latch features are included. Please cut only what is in the DXF.
 - Do not scale the drawing. All dimensions are final.
 
-BACK STIFFENER STRIPS - 4 pieces, same 3 mm aluminium
+BACK STIFFENER PIECES - 6 pieces, same 3 mm aluminium
 ------------------------------------------------------------------
-Nested to the right of and above the panel on the same sheet. They are
-separate parts that bond flat to the BACK of the panel; they are not
-visible in the finished build. Total sheet extent 236.00 x 444.00.
+These are SEPARATE PARTS nested INSIDE the large 11 inch window opening.
+That material is being removed anyway, so they use no extra sheet: total
+sheet extent stays 194.00 x 384.00, the panel size.
 
-   left strip       12.00 W x  378.00 H   nested at X 204.00, Y 0.00
-                  no holes
-   right strip      10.00 W x  378.00 H   nested at X 226.00, Y 0.00
-                  no holes
-   top strip       172.00 W x   20.00 H   nested at X 0.00, Y 394.00
-                  hole at X 51.00, Y 7.00
-                  hole at X 122.00, Y 7.00
-   bottom strip    172.00 W x   20.00 H   nested at X 0.00, Y 424.00
-                  hole at X 18.00, Y 16.00
-                  hole at X 152.00, Y 16.00
+** CUT ORDER: please cut these 6 pieces BEFORE cutting the large window
+   outline that surrounds them. Once the window contour is cut the slug
+   they sit in drops away. **
+
+Sizes below are as drawn. They bond flat to the BACK of the panel and are
+not visible in the finished build.
+
+   left strip A      17.00 W x  189.00 H   drawn at X 28.39, Y 32.81
+                   no holes
+   left strip B      17.00 W x  189.00 H   drawn at X 50.39, Y 32.81
+                   no holes
+   right strip A     11.00 W x  189.00 H   drawn at X 72.39, Y 32.81
+                   no holes
+   right strip B     11.00 W x  189.00 H   drawn at X 88.39, Y 32.81
+                   no holes
+   top strip         24.50 W x  166.00 H   drawn at X 104.39, Y 32.81
+                   hole at X 13.00, Y 46.00
+                   hole at X 13.00, Y 117.00
+   bottom strip      21.50 W x  166.00 H   drawn at X 133.89, Y 32.81
+                   hole at X 5.50, Y 13.00
+                   hole at X 5.50, Y 147.00
+   mid bar            8.50 W x  166.00 H   drawn at X 160.39, Y 32.81
+                   no holes
 
 Strip hole positions are offsets from that strip's own lower-left corner
 and match the panel holes, so one screw passes through both layers.
