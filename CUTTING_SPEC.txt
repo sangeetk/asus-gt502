@@ -5,8 +5,9 @@ ASUS ROG GT502, aluminium front panel with two touchscreen cutouts
 DXF FILE   : GT502_front_panel_194x384_both_screens.dxf
 MATERIAL   : Aluminium sheet, 3.0 mm thickness
 QUANTITY   : 1 off of everything on the sheet - the panel plus the 7 back
-             stiffener pieces nested inside its large window. ONE cutting job,
-             8 parts delivered in total.
+             stiffener pieces nested inside its large window, plus 2
+             decorative name pieces nested inside the smaller window.
+             ONE cutting job, 10 parts delivered in total.
 PROCESS    : Laser cut (fibre) or waterjet
 UNITS      : Millimetres. DXF is AC1009 / R12 ASCII, $INSUNITS = 4 (mm).
 GEOMETRY   : Panel outer profile + internal cutouts, plus 7 separate
@@ -124,3 +125,24 @@ finished build.
 Strip hole positions are offsets from that strip's own lower-left corner
 and match the panel holes, so one screw passes through both layers.
 Deburr both faces - these bond flat against the panel.
+
+DECORATIVE NAME PIECES - 2 off, same 3 mm aluminium
+------------------------------------------------------------------
+Nested inside the SMALLER (6.25 inch) window opening - again,
+scrap material, so no extra sheet is used.
+
+** CUT ORDER: cut these before the 6.25 inch window outline that
+   surrounds them, for the same reason as the stiffener pieces. **
+
+Each name is ONE connected piece of script lettering. The outer
+contour is the part boundary; the inner contours are letter
+counters and drop out. Curves are supplied as fine polylines -
+please cut them as drawn, do not re-fit arcs or smooth them.
+
+   Amishi     81.51 W x  23.10 H   at X 59.25, Y 293.48   (3 contours)
+   Mayan      84.94 W x  29.61 H   at X 57.53, Y 320.58   (4 contours)
+
+Typeface: Floraison des Amours. Narrowest neck in the lettering is 1.06 mm
+and that is deliberate and cuttable in 3 mm. Please cut the
+outlines exactly as supplied: do not smooth them, do not re-fit
+arcs, and do not thin or thicken the strokes.

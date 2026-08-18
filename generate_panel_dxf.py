@@ -18,6 +18,11 @@ is a single closed loop, which is what a laser CAM wants.
 
 import math
 
+try:
+    from name_outlines import NAMES, NAME_FONT, NAME_ASCENDER_MM
+except ImportError:          # names are optional; panel still generates without
+    NAMES, NAME_FONT, NAME_ASCENDER_MM = {}, None, None
+
 BULGE_90 = math.tan(math.radians(90) / 4)  # 0.4142135624, CCW quarter arc
 
 
@@ -193,6 +198,13 @@ BORDER_WIN_MARGIN = 5.0  # margin from the 11in window edge to the nested pieces
 # gap less MID_CLEAR each side, so it can never touch either screen.
 BORDER_MID_BAR = True
 BORDER_MID_CLEAR = 0.25
+
+# Decorative name pieces, cut from the slug inside the 6.25in window - that
+# material is scrap too, so they also cost no extra sheet. Outlines live in
+# name_outlines.py; each is one connected piece.
+NAME_PIECES = ("Mayan", "Amishi")
+NAME_MARGIN = 5.0        # clearance from the 6.25in window edge
+NAME_GAP = 4.0           # vertical gap between the two names
 BORDER_SIDE_PIECES = 2   # split each long side strip into this many pieces
 
 # The strips are nested INSIDE the 11in window - that slug is scrap anyway, so
@@ -414,7 +426,7 @@ def svg_path_verts(verts, ox=0.0, oy=0.0):
 
 # ------------------------------------------------------------------ SVG preview
 def svg(path, pw, ph, cutouts, refs, title, letters=(), holes=(),
-        parts=(), ghosts=(), canvas=None):
+        parts=(), ghosts=(), names=(), canvas=None):
     pad = 20
     cw, chh = canvas or (pw, ph)
     s = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{cw+2*pad}" '
@@ -437,6 +449,12 @@ def svg(path, pw, ph, cutouts, refs, title, letters=(), holes=(),
         s.append(f'<path d="{svg_path_verts(vs, x, y)}" '
                  f'fill="#9aa0a6" fill-opacity="0.35" stroke="#5f6368" '
                  f'stroke-width="0.5" stroke-dasharray="4 2"/>')
+    for nx, ny, rings in names:    # name pieces, cut from the 6.25in slug
+        d = " ".join(
+            "M " + " L ".join(f"{nx+rx:.3f},{ny+ry:.3f}" for rx, ry in ring) + " Z"
+            for ring in rings)
+        s.append(f'<path d="{d}" fill="#c8ccd0" fill-rule="evenodd" '
+                 f'stroke="#dc2626" stroke-width="0.5"/>')
     for x, y, phs, vs in parts:    # the same strips, nested for cutting
         s.append(f'<path d="{svg_path_verts(vs, x, y)}" '
                  f'fill="#c8ccd0" stroke="#dc2626" stroke-width="0.8"/>')
@@ -655,6 +673,13 @@ def build_both(out_dxf, out_svg, out_print, panel_h=None, cut_gap=5.0,
         for hxo, hyo in hs:
             d.circle("CUT_INNER", nx + hxo, ny + hyo, HOLE_DIA)
 
+    nm = plan_names((x62, y62, cw62, ch62))
+    for n in nm:
+        for i, ring in enumerate(n["rings"]):
+            # ring 0 is the part boundary, the rest are letter counters
+            d.polygon("CUT_OUTER" if i == 0 else "CUT_INNER",
+                      [(n["x"] + rx, n["y"] + ry) for rx, ry in ring])
+
     with open(out_dxf, "w") as f:
         f.write(d.dumps(bd["sheet"]))
 
@@ -678,8 +703,10 @@ def build_both(out_dxf, out_svg, out_print, panel_h=None, cut_gap=5.0,
         f"gap {cut_gap:.1f} (glass gap {glass_gap:.1f})"
         + (f", text \"{word}\" {CAP_H:.0f} mm caps" if word else "")
         + f". Plus {len(bd['nested'])} back stiffener pieces nested inside the "
-          "11in window (grey dashed = where they bond behind the panel).",
+          "11in window (grey dashed = where they bond behind the panel)"
+        + (f" and {len(nm)} name pieces in the 6.25in window." if nm else "."),
         letters=letters, holes=svg_holes,
+        names=[(n["x"], n["y"], n["rings"]) for n in nm],
         parts=[(nx, ny, hs, bd["profiles"][n])
                for n, nx, ny, nw, nh, _, hs in bd["nested"]],
         ghosts=[(sx, sy, bd["profiles"][n]) if False else
@@ -700,7 +727,7 @@ def build_both(out_dxf, out_svg, out_print, panel_h=None, cut_gap=5.0,
                 overflow=overflow, glass_span=glass_span,
                 y11=y11, y62=y62, x11=x11, x62=x62,
                 band=band, glass_top=glass_top, word=word, holes=holes,
-                border=bd,
+                border=bd, names=nm,
                 g11rect=(x11 - ins11[0], y11 - ins11[2], g11w, g11h),
                 g62rect=(x62 - ins625[0], y62 - ins625[2], g62w, g62h),
                 text_w=text_w, baseline=baseline, n_letters=len(letters),
@@ -889,6 +916,37 @@ def plan_border(pw, ph, g11rect, g62rect, holes, win11):
                 strip_holes=strip_holes, nested=nested, sheet=(pw, ph),
                 nest_used=used_w, nest_room=ww - 2 * marg)
 
+
+def plan_names(win62):
+    """Stack the name pieces inside the 6.25in window slug, centred.
+
+    Returns [] when name_outlines.py is absent. Asserts they fit, so a font or
+    size change cannot silently push a name over the window edge.
+    """
+    words = [w for w in NAME_PIECES if w in NAMES]
+    if not words:
+        return []
+    wx, wy, ww, wh = win62
+    m, gap = NAME_MARGIN, NAME_GAP
+    tot_h = sum(NAMES[w]["h"] for w in words) + gap * (len(words) - 1)
+    max_w = max(NAMES[w]["w"] for w in words)
+    assert tot_h <= wh - 2 * m, (
+        f"names need {tot_h:.2f} of the {wh - 2 * m:.2f} available height")
+    assert max_w <= ww - 2 * m, (
+        f"widest name is {max_w:.2f}, only {ww - 2 * m:.2f} available")
+
+    y = wy + (wh - tot_h) / 2          # centre the stack vertically
+    out = []
+    for w in reversed(words):          # first word ends up on top
+        d = NAMES[w]
+        out.append(dict(word=w, x=wx + (ww - d["w"]) / 2, y=y,
+                        w=d["w"], h=d["h"], rings=d["rings"]))
+        y += d["h"] + gap
+    for n in out:                      # must sit clear of the window edge
+        assert n["x"] >= wx + m - 1e-6 and n["x"] + n["w"] <= wx + ww - m + 1e-6
+        assert n["y"] >= wy + m - 1e-6 and n["y"] + n["h"] <= wy + wh - m + 1e-6
+    return out
+
 SPEC = """CUSTOM FRONT PANEL - CUTTING SPECIFICATION
 ASUS ROG GT502, aluminium front panel with two touchscreen cutouts
 ==================================================================
@@ -896,8 +954,9 @@ ASUS ROG GT502, aluminium front panel with two touchscreen cutouts
 DXF FILE   : {dxf}
 MATERIAL   : Aluminium sheet, 3.0 mm thickness
 QUANTITY   : 1 off of everything on the sheet - the panel plus the {np} back
-             stiffener pieces nested inside its large window. ONE cutting job,
-             {ntot} parts delivered in total.
+             stiffener pieces nested inside its large window, plus {nnm}
+             decorative name pieces nested inside the smaller window.
+             ONE cutting job, {ntot} parts delivered in total.
 PROCESS    : Laser cut (fibre) or waterjet
 UNITS      : Millimetres. DXF is AC1009 / R12 ASCII, $INSUNITS = 4 (mm).
 GEOMETRY   : Panel outer profile + internal cutouts, plus {np} separate
@@ -975,7 +1034,7 @@ finished build.
 Strip hole positions are offsets from that strip's own lower-left corner
 and match the panel holes, so one screw passes through both layers.
 Deburr both faces - these bond flat against the panel.
-"""
+{namesec}"""
 
 
 TEXT_NOTE = """
@@ -1002,9 +1061,33 @@ def write_spec(path, dxf_name, b, extra_windows=0, word=None):
         gap=b["gap"], above=ph - b["y62"] - b["c62"][1],
         hdia=HOLE_DIA, hn=len(b["holes"]), wdx=WIN_DX,
         sheetw=b["border"]["sheet"][0], sheeth=b["border"]["sheet"][1],
-        np=len(b["border"]["nested"]), ntot=1 + len(b["border"]["nested"]),
+        np=len(b["border"]["nested"]), nnm=len(b["names"]),
+        ntot=1 + len(b["border"]["nested"]) + len(b["names"]),
         nr=sum(1 for r in b["border"]["radii"].values() if any(r)),
         ns=sum(1 for d in b["border"]["desc"].values() if "STEPPED" in d),
+        namesec=("" if not b["names"] else
+                 "\nDECORATIVE NAME PIECES - {} off, same 3 mm aluminium\n"
+                 "------------------------------------------------------------------\n"
+                 "Nested inside the SMALLER (6.25 inch) window opening - again,\n"
+                 "scrap material, so no extra sheet is used.\n\n"
+                 "** CUT ORDER: cut these before the 6.25 inch window outline that\n"
+                 "   surrounds them, for the same reason as the stiffener pieces. **\n\n"
+                 "Each name is ONE connected piece of script lettering. The outer\n"
+                 "contour is the part boundary; the inner contours are letter\n"
+                 "counters and drop out. Curves are supplied as fine polylines -\n"
+                 "please cut them as drawn, do not re-fit arcs or smooth them.\n\n"
+                 + "".join(
+                     "   {:<8s} {:7.2f} W x {:6.2f} H   at X {:.2f}, Y {:.2f}"
+                     "   ({} contours)\n".format(
+                         n["word"], n["w"], n["h"], n["x"], n["y"], len(n["rings"]))
+                     for n in b["names"])
+                 + "\nTypeface: {}. Narrowest neck in the lettering is {:.2f} mm\n".format(
+                       NAME_FONT or "?",
+                       min(NAMES[n["word"]].get("min_neck", 0) for n in b["names"]))
+                 + "and that is deliberate and cuttable in 3 mm. Please cut the\n"
+                   "outlines exactly as supplied: do not smooth them, do not re-fit\n"
+                   "arcs, and do not thin or thicken the strokes.\n"
+                 ).format(len(b["names"])),
         striplist="\n\n".join(
             f"   {name.upper():<16s} bounding size {nw:.2f} W x {nh:.2f} H"
             f"   drawn at X {nx:.2f}, Y {ny:.2f}"
@@ -1086,6 +1169,13 @@ if __name__ == "__main__":
           f"{bd['nest_room']:.2f} across the 11in window")
     print(f"  SHEET EXTENT {bd['sheet'][0]:.2f} x {bd['sheet'][1]:.2f}"
           "  (panel only - pieces cost no extra sheet)")
+    if b["names"]:
+        print(f"\n=== name pieces ({NAME_FONT}, nested in the 6.25in window) ===")
+        for n in b["names"]:
+            print(f"  {n['word']:<8s} {n['w']:7.2f} x {n['h']:6.2f}"
+                  f"   at ({n['x']:.2f}, {n['y']:.2f})"
+                  f"   1 outer + {len(n['rings']) - 1} counter(s)")
+        print(f"  total parts on the sheet: {1 + len(bd['nested']) + len(b['names'])}")
 
     if not WORD:
         print()
