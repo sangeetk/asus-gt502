@@ -23,6 +23,17 @@ try:
 except ImportError:          # names are optional; panel still generates without
     NAMES, NAME_FONT, NAME_ASCENDER_MM = {}, None, None
 
+try:
+    from hunabku_outline import HUNAB_KU
+except ImportError:          # so is the keyring
+    HUNAB_KU = None
+
+try:
+    from ginger_outline import GINGER
+except ImportError:          # and so is the lettering
+    GINGER = None
+
+
 BULGE_90 = math.tan(math.radians(90) / 4)  # 0.4142135624, CCW quarter arc
 
 
@@ -206,6 +217,34 @@ NAME_PIECES = ("Mayan", "Amishi")
 NAME_MARGIN = 5.0        # clearance from the 6.25in window edge
 NAME_GAP = 4.0           # vertical gap between the two names
 BORDER_SIDE_PIECES = 2   # split each long side strip into this many pieces
+
+# Hunab Ku keyring, cut from the leftover slug ABOVE the shorter nested strips
+# inside the 11in window. Outline lives in hunabku_outline.py.
+#
+# Size is not a taste decision. The symbol's own line work is what it is, so
+# every feature in it scales with the disc: at MEDAL_ART_DIA the narrowest
+# metal and the narrowest slot are HUNAB_KU["min_metal"/"min_slot"] * dia/100,
+# and below about 0.9 mm a fibre laser stops making a clean job of 3 mm
+# aluminium. That pushes the disc AS LARGE as the free space allows rather than
+# to any keyring-ish size - hence 52 mm, which is what fits.
+MEDALLION = True
+MEDAL_ART_DIA = 52.0      # the traced symbol's own disc
+MEDAL_RIM_EXTRA = 1.0     # widen the outer rim past the artwork, see below
+MEDAL_LUG_R = 4.0         # keyring lug radius
+MEDAL_LUG_STANDOFF = 2.6  # lug centre this far OUTSIDE the disc edge
+MEDAL_LUG_FILLET = 1.5    # fillet where the lug meets the disc
+MEDAL_RING_HOLE = 3.5     # keyring hole diameter
+MEDAL_MIN_FEATURE = 0.85  # refuse to draw it smaller than this, mm
+MEDAL_GAP = 4.0           # clearance to the nested strips
+
+# The "ginger" lettering, cut from what is left of the same slug, beside the
+# keyring. Traced from artwork rather than set from a font - outline and size
+# both live in ginger_outline.py, so there is no size constant here: the weld
+# tab holding the i-dot on is a fixed 2.5 mm and must not scale with the word.
+# Re-run trace_ginger.py to change the size.
+GINGER_CUT = True
+GINGER_GAP = 4.0          # clearance to the strips and the keyring
+GINGER_MIN_NECK = 1.0     # refuse to cut it thinner than this
 
 # The strips are nested INSIDE the 11in window - that slug is scrap anyway, so
 # they cost no extra sheet and the sheet stays the size of the panel. Pieces are
@@ -426,7 +465,7 @@ def svg_path_verts(verts, ox=0.0, oy=0.0):
 
 # ------------------------------------------------------------------ SVG preview
 def svg(path, pw, ph, cutouts, refs, title, letters=(), holes=(),
-        parts=(), ghosts=(), names=(), canvas=None):
+        parts=(), ghosts=(), names=(), medal=None, canvas=None):
     pad = 20
     cw, chh = canvas or (pw, ph)
     s = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{cw+2*pad}" '
@@ -455,6 +494,15 @@ def svg(path, pw, ph, cutouts, refs, title, letters=(), holes=(),
             for ring in rings)
         s.append(f'<path d="{d}" fill="#c8ccd0" fill-rule="evenodd" '
                  f'stroke="#dc2626" stroke-width="0.5"/>')
+    if medal:                      # keyring, cut from the 11in slug
+        mx, my, mrings, (mhx, mhy), mhd = medal
+        dd = " ".join(
+            "M " + " L ".join(f"{mx+rx:.3f},{my+ry:.3f}" for rx, ry in ring) + " Z"
+            for ring in mrings)
+        s.append(f'<path d="{dd}" fill="#c8ccd0" fill-rule="evenodd" '
+                 f'stroke="#dc2626" stroke-width="0.5"/>')
+        s.append(f'<circle cx="{mx+mhx:.3f}" cy="{my+mhy:.3f}" r="{mhd/2:.3f}" '
+                 f'fill="#f4f4f5" stroke="#dc2626" stroke-width="0.5"/>')
     for x, y, phs, vs in parts:    # the same strips, nested for cutting
         s.append(f'<path d="{svg_path_verts(vs, x, y)}" '
                  f'fill="#c8ccd0" stroke="#dc2626" stroke-width="0.8"/>')
@@ -680,6 +728,22 @@ def build_both(out_dxf, out_svg, out_print, panel_h=None, cut_gap=5.0,
             d.polygon("CUT_OUTER" if i == 0 else "CUT_INNER",
                       [(n["x"] + rx, n["y"] + ry) for rx, ry in ring])
 
+    md = plan_medallion((x11, y11, cw11, ch11), bd["nested"])
+    if md:
+        for i, ring in enumerate(md["rings"]):
+            # ring 0 is the part boundary, the rest are the symbol's own holes
+            d.polygon("CUT_OUTER" if i == 0 else "CUT_INNER",
+                      [(md["x"] + rx, md["y"] + ry) for rx, ry in ring])
+        d.circle("CUT_INNER", md["x"] + md["hole"][0], md["y"] + md["hole"][1],
+                 MEDAL_RING_HOLE)
+
+    gg = plan_ginger((x11, y11, cw11, ch11), bd["nested"], md)
+    if gg:
+        for i, ring in enumerate(gg["rings"]):
+            # ring 0 is the part boundary, the rest are counters in the letters
+            d.polygon("CUT_OUTER" if i == 0 else "CUT_INNER",
+                      [(gg["x"] + rx, gg["y"] + ry) for rx, ry in ring])
+
     with open(out_dxf, "w") as f:
         f.write(d.dumps(bd["sheet"]))
 
@@ -704,9 +768,16 @@ def build_both(out_dxf, out_svg, out_print, panel_h=None, cut_gap=5.0,
         + (f", text \"{word}\" {CAP_H:.0f} mm caps" if word else "")
         + f". Plus {len(bd['nested'])} back stiffener pieces nested inside the "
           "11in window (grey dashed = where they bond behind the panel)"
-        + (f" and {len(nm)} name pieces in the 6.25in window." if nm else "."),
+        + (f", {len(nm)} name pieces in the 6.25in window" if nm else "")
+        + (f", the {md['dia']:.0f} mm Hunab Ku keyring above the strips"
+           if md else "")
+        + (f" and the {gg['w']:.0f} mm \"ginger\" lettering beside it."
+           if gg else "."),
         letters=letters, holes=svg_holes,
-        names=[(n["x"], n["y"], n["rings"]) for n in nm],
+        names=([(n["x"], n["y"], n["rings"]) for n in nm]
+               + ([(gg["x"], gg["y"], gg["rings"])] if gg else [])),
+        medal=((md["x"], md["y"], md["rings"], md["hole"], MEDAL_RING_HOLE)
+               if md else None),
         parts=[(nx, ny, hs, bd["profiles"][n])
                for n, nx, ny, nw, nh, _, hs in bd["nested"]],
         ghosts=[(sx, sy, bd["profiles"][n]) if False else
@@ -727,7 +798,7 @@ def build_both(out_dxf, out_svg, out_print, panel_h=None, cut_gap=5.0,
                 overflow=overflow, glass_span=glass_span,
                 y11=y11, y62=y62, x11=x11, x62=x62,
                 band=band, glass_top=glass_top, word=word, holes=holes,
-                border=bd, names=nm,
+                border=bd, names=nm, medal=md, ginger=gg,
                 g11rect=(x11 - ins11[0], y11 - ins11[2], g11w, g11h),
                 g62rect=(x62 - ins625[0], y62 - ins625[2], g62w, g62h),
                 text_w=text_w, baseline=baseline, n_letters=len(letters),
@@ -947,6 +1018,151 @@ def plan_names(win62):
         assert n["y"] >= wy + m - 1e-6 and n["y"] + n["h"] <= wy + wh - m + 1e-6
     return out
 
+# --------------------------------------------------------------- hunab ku part
+def arc_pts(cx, cy, r, a0, a1, ccw, seg=0.25):
+    """Points along an arc from a0 to a1 (radians), excluding the last."""
+    span = (a1 - a0) % (2 * math.pi) if ccw else -((a0 - a1) % (2 * math.pi))
+    n = max(2, int(abs(span) * r / seg) + 1)
+    return [(cx + r * math.cos(a0 + span * k / n),
+             cy + r * math.sin(a0 + span * k / n)) for k in range(n)]
+
+
+def medallion_rings(art_dia):
+    """The Hunab Ku keyring as closed rings, origin at its bounding-box corner.
+
+    Two things are added to the traced artwork, both for the keyring:
+
+    - the outer boundary is drawn MEDAL_RIM_EXTRA outside the symbol's own
+      disc. The artwork's outer ring is about as thin as everything else in it,
+      and that ring is what the keyring hangs off, so it gets doubled up. It
+      reads as a slightly heavier rim and nothing else moves.
+    - a lug on top, filleted into the disc, carrying the keyring hole. There is
+      nowhere inside the symbol to put a hole: the widest solid area in it takes
+      a 10 mm circle at 55 mm diameter, and that is off to one side, so a hole
+      there would both deface it and hang it crooked.
+
+    Returns rings[0] = boundary, rings[1:] = the symbol's own holes.
+    """
+    assert HUNAB_KU, "hunabku_outline.py is missing"
+    s = art_dia / HUNAB_KU["nominal_dia"]
+    R = art_dia / 2 + MEDAL_RIM_EXTRA          # outer rim of the part
+    rl, rf = MEDAL_LUG_R, MEDAL_LUG_FILLET
+    d = R + MEDAL_LUG_STANDOFF                 # lug centre, above the disc
+    assert d < R + rl, "lug does not reach the disc"
+
+    # Fillet centre: R + rf from the disc centre, rl + rf from the lug centre.
+    A, B = R + rf, rl + rf
+    fy = (A * A - B * B + d * d) / (2 * d)
+    assert A * A - fy * fy > 0, "no fillet fits between disc and lug"
+    fx = math.sqrt(A * A - fy * fy)
+
+    a_disc = math.atan2(fy, fx)                # disc tangent, right-hand side
+    a_lug = math.atan2(fy - d, fx)             # lug tangent, right-hand side
+    ang_to_o = math.atan2(-fy, -fx)            # fillet centre -> disc tangent
+    ang_to_c = math.atan2(d - fy, -fx)         # fillet centre -> lug tangent
+
+    ring = []
+    ring += arc_pts(0, 0, R, math.pi - a_disc, a_disc, True)      # the long way
+    ring += arc_pts(fx, fy, rf, ang_to_o, ang_to_c, False)        # right fillet
+    ring += arc_pts(0, d, rl, a_lug, math.pi - a_lug, True)       # over the lug
+    ring += arc_pts(-fx, fy, rf, math.pi - ang_to_c,
+                    math.pi - ang_to_o, False)                    # left fillet
+
+    holes = [[(x * s, y * s) for x, y in r] for r in HUNAB_KU["rings"][1:]]
+    for h in holes:                            # the artwork must stay in its disc
+        assert max(math.hypot(x, y) for x, y in h) < art_dia / 2, \
+            "a hole in the artwork crosses its own disc"
+
+    w, h = 2 * R, R + d + rl
+    ox, oy = R, R                              # bbox corner -> disc centre
+    rings = [[(x + ox, y + oy) for x, y in r] for r in [ring] + holes]
+    hole_xy = (ox, oy + d)
+
+    # Narrowest metal and slot scale straight off the traced numbers.
+    mm = HUNAB_KU["min_metal"] * art_dia / HUNAB_KU["nominal_dia"]
+    ms = HUNAB_KU["min_slot"] * art_dia / HUNAB_KU["nominal_dia"]
+    assert min(mm, ms) >= MEDAL_MIN_FEATURE, (
+        f"at {art_dia:.1f} mm the symbol needs {min(mm, ms):.2f} mm features, "
+        f"below the {MEDAL_MIN_FEATURE:.2f} mm limit - make it bigger")
+    neck = min(math.hypot(x - hole_xy[0], y - hole_xy[1])
+               for x, y in rings[0]) - MEDAL_RING_HOLE / 2
+    assert neck >= 1.5, f"only {neck:.2f} mm of metal around the keyring hole"
+
+    return dict(rings=rings, w=w, h=h, hole=hole_xy, dia=2 * R,
+                min_metal=mm, min_slot=ms, neck=neck, art=art_dia)
+
+
+def free_rects(win, blockers, marg, gap):
+    """Maximal free rectangles inside a window slug, above what is already in it.
+
+    Only floors that sit on top of something are considered, which is all this
+    nest ever needs: every stiffener piece stands on the bottom edge, so the
+    leftovers are always bands above them.
+    """
+    wx, wy, ww, wh = win
+    top = wy + wh - marg
+    out = []
+    for floor in sorted({wy + marg} | {by + bh + gap for _, by, _, bh in blockers}):
+        if floor >= top:
+            continue
+        blocked = sorted((bx - gap, bx + bw + gap)
+                         for bx, by, bw, bh in blockers if by + bh > floor)
+        cur = wx + marg
+        for lo, hi in blocked + [(wx + ww - marg, wx + ww - marg)]:
+            if lo > cur:
+                out.append((cur, floor, min(lo, wx + ww - marg) - cur, top - floor))
+            cur = max(cur, hi)
+    return out
+
+
+def plan_medallion(win11, nested):
+    """Drop the keyring into the space left over above the shorter strips.
+
+    Finds the free rectangle rather than being told where it is, so re-nesting
+    the stiffener pieces moves the keyring instead of quietly overlapping one.
+    """
+    if not (MEDALLION and HUNAB_KU):
+        return None
+    m = medallion_rings(MEDAL_ART_DIA)
+    boxes = [(nx, ny, nw, nh) for _, nx, ny, nw, nh, _, _ in nested]
+    fits = [r for r in free_rects(win11, boxes, BORDER_WIN_MARGIN, MEDAL_GAP)
+            if r[2] >= m["w"] and r[3] >= m["h"]]
+    assert fits, (f"no {m['w']:.1f} x {m['h']:.1f} space left in the 11in "
+                  "window for the keyring")
+    fx, fy, fw, fh = max(fits, key=lambda r: r[2] * r[3])
+    m["x"] = fx + (fw - m["w"]) / 2             # centred in the free rectangle
+    m["y"] = fy + (fh - m["h"]) / 2
+    m["free"] = (fx, fy, fw, fh)
+    return m
+
+
+def plan_ginger(win11, nested, medal):
+    """Put the lettering in what is left of the slug once the keyring has its spot.
+
+    Same free-rectangle search as the keyring, with the keyring itself added as
+    something to keep clear of, so the two can never be planned on top of each
+    other.
+    """
+    if not (GINGER_CUT and GINGER):
+        return None
+    g = dict(GINGER)
+    assert g["neck"] >= GINGER_MIN_NECK, (
+        f"the lettering's narrowest stroke is {g['neck']:.2f} mm, under the "
+        f"{GINGER_MIN_NECK:.2f} mm limit - cut it larger in trace_ginger.py")
+    boxes = [(nx, ny, nw, nh) for _, nx, ny, nw, nh, _, _ in nested]
+    if medal:
+        boxes.append((medal["x"], medal["y"], medal["w"], medal["h"]))
+    fits = [r for r in free_rects(win11, boxes, BORDER_WIN_MARGIN, GINGER_GAP)
+            if r[2] >= g["w"] and r[3] >= g["h"]]
+    assert fits, (f"no {g['w']:.1f} x {g['h']:.1f} space left in the 11in window "
+                  "for the lettering - lower TARGET_W in trace_ginger.py")
+    fx, fy, fw, fh = max(fits, key=lambda r: r[2] * r[3])
+    g["x"] = fx + (fw - g["w"]) / 2
+    g["y"] = fy + (fh - g["h"]) / 2
+    g["free"] = (fx, fy, fw, fh)
+    return g
+
+
 SPEC = """CUSTOM FRONT PANEL - CUTTING SPECIFICATION
 ASUS ROG GT502, aluminium front panel with two touchscreen cutouts
 ==================================================================
@@ -955,7 +1171,9 @@ DXF FILE   : {dxf}
 MATERIAL   : Aluminium sheet, 3.0 mm thickness
 QUANTITY   : 1 off of everything on the sheet - the panel plus the {np} back
              stiffener pieces nested inside its large window, plus {nnm}
-             decorative name pieces nested inside the smaller window.
+             decorative name pieces nested inside the smaller window, plus
+             {nmed} keyring and {ngin} lettering piece nested in the large
+             window above the stiffeners.
              ONE cutting job, {ntot} parts delivered in total.
 PROCESS    : Laser cut (fibre) or waterjet
 UNITS      : Millimetres. DXF is AC1009 / R12 ASCII, $INSUNITS = 4 (mm).
@@ -969,8 +1187,10 @@ LAYERS     : Every contour in this file is a THROUGH-CUT. There is no
              All geometry is drawn in ONE colour (red, ACI 1) so there is no
              colour mapping to interpret. Two layers are used purely to say
              which side of the line the kerf belongs on:
-               CUT_OUTER  part boundaries - panel profile and the 6 strips
-               CUT_INNER  openings - windows and all holes
+               CUT_OUTER  part boundaries - the panel profile and the
+                          outline of every separate part nested inside it
+               CUT_INNER  openings - windows, holes, and every internal
+                          contour of a nested part
              If your workflow needs everything on a single layer, merging
              them is fine; the layer names carry no operation meaning.
 KERF       : Geometry is NOMINAL. Please apply your own kerf compensation so
@@ -1034,7 +1254,61 @@ finished build.
 Strip hole positions are offsets from that strip's own lower-left corner
 and match the panel holes, so one screw passes through both layers.
 Deburr both faces - these bond flat against the panel.
-{namesec}"""
+{namesec}{medalsec}{gingersec}"""
+
+
+MEDAL_NOTE = """
+HUNAB KU KEYRING - 1 off, same 3 mm aluminium
+------------------------------------------------------------------
+One more separate part, nested inside the LARGE (11 inch) window above
+the stiffener pieces. Scrap material again, so no extra sheet.
+
+** CUT ORDER: cut this piece BEFORE the 11 inch window outline, same
+   reason as the stiffener pieces. **
+
+   bounding size    {w:.2f} W x {h:.2f} H, drawn at X {x:.2f}, Y {y:.2f}
+   disc             {dia:.2f} diameter, centre X {cx:.2f}, Y {cy:.2f}
+   keyring hole     {hd:.2f} diameter THROUGH at X {hx:.2f}, Y {hy:.2f}
+   contours         1 outer boundary + {nh} internal + the keyring hole
+
+** THE NARROWEST METAL IN THIS PART IS {mm:.2f} mm AND THE NARROWEST SLOT
+   {ms:.2f} mm. ** That is the finest work on the sheet. Please confirm you
+   can hold it in 3 mm aluminium before cutting; if you cannot, say so
+   rather than opening the slots out, and this part will be dropped or
+   redrawn. Nothing else on the sheet depends on it.
+
+The outline is a traced symbol, supplied as fine polylines. Cut it exactly
+as drawn: do not smooth it, do not re-fit arcs, do not thin or thicken
+anything. The stepped edges are meant to be stepped.
+
+The piece is one connected part - every internal contour is a hole that
+drops out, and nothing in it is a loose island.
+"""
+
+
+GINGER_NOTE = """
+"GINGER" LETTERING - 1 off, same 3 mm aluminium
+------------------------------------------------------------------
+One more separate part, nested inside the LARGE (11 inch) window beside
+the keyring. Scrap material again, so no extra sheet.
+
+** CUT ORDER: cut this piece BEFORE the 11 inch window outline, same
+   reason as everything else nested inside it. **
+
+   bounding size    {w:.2f} W x {h:.2f} H, drawn at X {x:.2f}, Y {y:.2f}
+   contours         1 outer boundary + {nh} counters, all of which drop out
+   narrowest stroke {neck:.2f} mm
+
+This is ONE connected piece of brush lettering, traced from artwork - not
+type. The dot of the "i" is a separate shape in the artwork and is tied to
+the letter below it by a {weld:.1f} mm WELD TAB drawn into the outline. Without
+that tab the dot is a loose disc. Please cut the outline exactly as
+supplied: do not remove the tab, do not smooth the curves, do not re-fit
+arcs, and do not thin or thicken the strokes.
+
+Curves are supplied as fine polylines, which is what tracing artwork
+gives; they are already simplified and are meant to be cut as they are.
+"""
 
 
 TEXT_NOTE = """
@@ -1062,7 +1336,14 @@ def write_spec(path, dxf_name, b, extra_windows=0, word=None):
         hdia=HOLE_DIA, hn=len(b["holes"]), wdx=WIN_DX,
         sheetw=b["border"]["sheet"][0], sheeth=b["border"]["sheet"][1],
         np=len(b["border"]["nested"]), nnm=len(b["names"]),
-        ntot=1 + len(b["border"]["nested"]) + len(b["names"]),
+        nmed=1 if b["medal"] else 0, ngin=1 if b["ginger"] else 0,
+        ntot=1 + len(b["border"]["nested"]) + len(b["names"])
+             + (1 if b["medal"] else 0) + (1 if b["ginger"] else 0),
+        gingersec=("" if not b["ginger"] else GINGER_NOTE.format(
+            w=b["ginger"]["w"], h=b["ginger"]["h"],
+            x=b["ginger"]["x"], y=b["ginger"]["y"],
+            nh=len(b["ginger"]["rings"]) - 1, neck=b["ginger"]["neck"],
+            weld=b["ginger"]["weld"])),
         nr=sum(1 for r in b["border"]["radii"].values() if any(r)),
         ns=sum(1 for d in b["border"]["desc"].values() if "STEPPED" in d),
         namesec=("" if not b["names"] else
@@ -1088,6 +1369,16 @@ def write_spec(path, dxf_name, b, extra_windows=0, word=None):
                    "outlines exactly as supplied: do not smooth them, do not re-fit\n"
                    "arcs, and do not thin or thicken the strokes.\n"
                  ).format(len(b["names"])),
+        medalsec=("" if not b["medal"] else MEDAL_NOTE.format(
+            w=b["medal"]["w"], h=b["medal"]["h"],
+            x=b["medal"]["x"], y=b["medal"]["y"], dia=b["medal"]["dia"],
+            cx=b["medal"]["x"] + b["medal"]["w"] / 2,
+            cy=b["medal"]["y"] + b["medal"]["dia"] / 2,
+            hd=MEDAL_RING_HOLE,
+            hx=b["medal"]["x"] + b["medal"]["hole"][0],
+            hy=b["medal"]["y"] + b["medal"]["hole"][1],
+            nh=len(b["medal"]["rings"]) - 1,
+            mm=b["medal"]["min_metal"], ms=b["medal"]["min_slot"])),
         striplist="\n\n".join(
             f"   {name.upper():<16s} bounding size {nw:.2f} W x {nh:.2f} H"
             f"   drawn at X {nx:.2f}, Y {ny:.2f}"
@@ -1175,8 +1466,26 @@ if __name__ == "__main__":
             print(f"  {n['word']:<8s} {n['w']:7.2f} x {n['h']:6.2f}"
                   f"   at ({n['x']:.2f}, {n['y']:.2f})"
                   f"   1 outer + {len(n['rings']) - 1} counter(s)")
-        print(f"  total parts on the sheet: {1 + len(bd['nested']) + len(b['names'])}")
 
+    if b["medal"]:
+        m = b["medal"]
+        print(f"\n=== hunab ku keyring (nested above the strips) ===")
+        print(f"  disc {m['dia']:.1f} dia, {m['w']:.2f} x {m['h']:.2f} overall"
+              f"   at ({m['x']:.2f}, {m['y']:.2f})")
+        print(f"  free rectangle {m['free'][2]:.2f} x {m['free'][3]:.2f}"
+              f" at ({m['free'][0]:.2f}, {m['free'][1]:.2f})")
+        print(f"  narrowest metal {m['min_metal']:.2f}, narrowest slot "
+              f"{m['min_slot']:.2f}, keyring hole wall {m['neck']:.2f}")
+    if b["ginger"]:
+        g = b["ginger"]
+        print("\n=== \"ginger\" lettering (traced artwork, beside the keyring) ===")
+        print(f"  {g['w']:.2f} x {g['h']:.2f}   at ({g['x']:.2f}, {g['y']:.2f})"
+              f"   in a {g['free'][2]:.2f} x {g['free'][3]:.2f} free rectangle")
+        print(f"  narrowest stroke {g['neck']:.2f}, {g['welds']} weld tab, "
+              f"1 outer + {len(g['rings']) - 1} counters")
+    parts = (1 + len(bd["nested"]) + len(b["names"])
+             + (1 if b["medal"] else 0) + (1 if b["ginger"] else 0))
+    print(f"\ntotal parts on the sheet: {parts}")
     if not WORD:
         print()
         raise SystemExit
