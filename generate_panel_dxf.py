@@ -238,6 +238,40 @@ class Dxf:
         out += ["0", "SEQEND", "8", layer]
         self.ents += out
 
+    def rect_corners(self, layer, x0, y0, w, h, radii):
+        """Closed CCW polyline, per-corner radii as (bl, br, tr, tl).
+
+        A zero radius emits a sharp corner. Lets a piece carry the panel's
+        corner radius on just the corner that sits at the panel corner, so it
+        can run the panel's full length instead of stopping at the arc tangent.
+        """
+        b, (r_bl, r_br, r_tr, r_tl) = BULGE_90, radii
+        v = []
+        v.append((x0 + r_bl, y0, 0.0) if r_bl else (x0, y0, 0.0))
+        if r_br:
+            v += [(x0 + w - r_br, y0, b), (x0 + w, y0 + r_br, 0.0)]
+        else:
+            v.append((x0 + w, y0, 0.0))
+        if r_tr:
+            v += [(x0 + w, y0 + h - r_tr, b), (x0 + w - r_tr, y0 + h, 0.0)]
+        else:
+            v.append((x0 + w, y0 + h, 0.0))
+        if r_tl:
+            v += [(x0 + r_tl, y0 + h, b), (x0, y0 + h - r_tl, 0.0)]
+        else:
+            v.append((x0, y0 + h, 0.0))
+        if r_bl:
+            v.append((x0, y0 + r_bl, b))
+
+        out = ["0", "POLYLINE", "8", layer, "66", "1", "70", "1",
+               "10", "0.0", "20", "0.0", "30", "0.0"]
+        for x, y, bg in v:
+            out += ["0", "VERTEX", "8", layer,
+                    "10", f"{x:.4f}", "20", f"{y:.4f}", "30", "0.0",
+                    "42", f"{bg:.10f}"]
+        out += ["0", "SEQEND", "8", layer]
+        self.ents += out
+
     def polygon(self, layer, pts):
         """Closed polyline through pts, straight segments, forced CCW."""
         pts = ccw(pts)
@@ -280,6 +314,37 @@ class Dxf:
         return "\r\n".join(h + t + e + ["0", "EOF"]) + "\r\n"
 
 
+
+def svg_corner_path(x0, y0, w, h, radii):
+    """SVG path `d` for a rectangle with per-corner radii (bl, br, tr, tl).
+
+    Traversed so that every arc sweeps in the increasing-angle direction, hence
+    sweep-flag 1 throughout. A zero radius degenerates to a sharp corner.
+    """
+    r_bl, r_br, r_tr, r_tl = radii
+    d = [f"M {x0 + r_bl:.3f},{y0:.3f}"]
+    if r_br:
+        d.append(f"L {x0 + w - r_br:.3f},{y0:.3f}")
+        d.append(f"A {r_br:.3f},{r_br:.3f} 0 0 1 {x0 + w:.3f},{y0 + r_br:.3f}")
+    else:
+        d.append(f"L {x0 + w:.3f},{y0:.3f}")
+    if r_tr:
+        d.append(f"L {x0 + w:.3f},{y0 + h - r_tr:.3f}")
+        d.append(f"A {r_tr:.3f},{r_tr:.3f} 0 0 1 {x0 + w - r_tr:.3f},{y0 + h:.3f}")
+    else:
+        d.append(f"L {x0 + w:.3f},{y0 + h:.3f}")
+    if r_tl:
+        d.append(f"L {x0 + r_tl:.3f},{y0 + h:.3f}")
+        d.append(f"A {r_tl:.3f},{r_tl:.3f} 0 0 1 {x0:.3f},{y0 + h - r_tl:.3f}")
+    else:
+        d.append(f"L {x0:.3f},{y0 + h:.3f}")
+    if r_bl:
+        d.append(f"L {x0:.3f},{y0 + r_bl:.3f}")
+        d.append(f"A {r_bl:.3f},{r_bl:.3f} 0 0 1 {x0 + r_bl:.3f},{y0:.3f}")
+    else:
+        d.append(f"L {x0:.3f},{y0:.3f}")
+    return " ".join(d) + " Z"
+
 # ------------------------------------------------------------------ SVG preview
 def svg(path, pw, ph, cutouts, refs, title, letters=(), holes=(),
         parts=(), ghosts=(), canvas=None):
@@ -301,12 +366,12 @@ def svg(path, pw, ph, cutouts, refs, title, letters=(), holes=(),
     for hx, hy, hd in holes:
         s.append(f'<circle cx="{hx:.3f}" cy="{hy:.3f}" r="{hd/2:.3f}" '
                  f'fill="#f4f4f5" stroke="#dc2626" stroke-width="0.8"/>')
-    for x, y, w, h in ghosts:      # where the strips end up, behind the panel
-        s.append(f'<rect x="{x:.3f}" y="{y:.3f}" width="{w:.3f}" height="{h:.3f}" '
+    for x, y, w, h, rad in ghosts:  # where the strips end up, behind the panel
+        s.append(f'<path d="{svg_corner_path(x, y, w, h, rad)}" '
                  f'fill="#9aa0a6" fill-opacity="0.35" stroke="#5f6368" '
                  f'stroke-width="0.5" stroke-dasharray="4 2"/>')
-    for x, y, w, h, phs in parts:  # the same strips, nested for cutting
-        s.append(f'<rect x="{x:.3f}" y="{y:.3f}" width="{w:.3f}" height="{h:.3f}" '
+    for x, y, w, h, phs, rad in parts:  # the same strips, nested for cutting
+        s.append(f'<path d="{svg_corner_path(x, y, w, h, rad)}" '
                  f'fill="#c8ccd0" stroke="#dc2626" stroke-width="0.8"/>')
         for hx, hy in phs:
             s.append(f'<circle cx="{x+hx:.3f}" cy="{y+hy:.3f}" r="{HOLE_DIA/2:.3f}" '
@@ -519,7 +584,7 @@ def build_both(out_dxf, out_svg, out_print, panel_h=None, cut_gap=5.0,
                      (x62 - ins625[0], y62 - ins625[2]) + SCREEN_625["glass"],
                      holes, (x11, y11, cw11, ch11))
     for name, nx, ny, nw, nh, rot, hs in bd["nested"]:
-        d.rounded_rect("CUT_OUTER", nx, ny, nw, nh, 0.001)
+        d.rect_corners("CUT_OUTER", nx, ny, nw, nh, bd["radii"][name])
         for hxo, hyo in hs:
             d.circle("CUT_INNER", nx + hxo, ny + hyo, HOLE_DIA)
 
@@ -548,9 +613,10 @@ def build_both(out_dxf, out_svg, out_print, panel_h=None, cut_gap=5.0,
         + f". Plus {len(bd['nested'])} back stiffener pieces nested inside the "
           "11in window (grey dashed = where they bond behind the panel).",
         letters=letters, holes=svg_holes,
-        parts=[(nx, ny, nw, nh, hs)
-               for _, nx, ny, nw, nh, _, hs in bd["nested"]],
-        ghosts=[(sx, sy, sw, sh) for _, sx, sy, sw, sh in bd["placed"]],
+        parts=[(nx, ny, nw, nh, hs, bd["radii"][n])
+               for n, nx, ny, nw, nh, _, hs in bd["nested"]],
+        ghosts=[(sx, sy, sw, sh, bd["radii"][n])
+                for n, sx, sy, sw, sh in bd["placed"]],
         canvas=bd["sheet"])
 
     svg_1to1(out_print, PANEL_W, ph, cutouts, refs, [
@@ -604,7 +670,9 @@ def plan_border(pw, ph, g11rect, g62rect, holes, win11):
     # Verticals run the full height between the panel's corner radii, so their
     # square ends stop exactly on the arc tangents and nothing juts past the
     # rounded corner. Horizontals butt between them.
-    vy, vh = PANEL_CORNER_R, ph - 2 * PANEL_CORNER_R
+    # Verticals run the panel's FULL height; the piece at each end carries the
+    # panel's own corner radius on its outer corner so it matches the profile.
+    vy, vh = 0.0, ph
     hx = width["left"]
     hw = pw - width["left"] - width["right"]
 
@@ -612,21 +680,32 @@ def plan_border(pw, ph, g11rect, g62rect, holes, win11):
     # the pieces are short enough to nest inside the 11in window.
     n = BORDER_SIDE_PIECES
     seg = vh / n
-    placed = []
+    placed, radii = [], {}
+    R = PANEL_CORNER_R
     for side, sx in (("left", 0.0), ("right", pw - width["right"])):
         for k in range(n):
-            placed.append((f"{side} strip {chr(65 + k)}", sx, vy + k * seg,
-                           width[side], seg))
+            name = f"{side} strip {chr(65 + k)}"
+            placed.append((name, sx, vy + k * seg, width[side], seg))
+            # (bl, br, tr, tl) - only the corner at the panel corner is rounded
+            bl = br = tr = tl = 0.0
+            if k == 0:                       # bottom-most piece
+                bl, br = (R, 0.0) if side == "left" else (0.0, R)
+            if k == n - 1:                   # top-most piece
+                tl, tr = (R, 0.0) if side == "left" else (0.0, R)
+            radii[name] = (bl, br, tr, tl)
     placed += [
         ("top strip",    hx, ph - width["top"], hw, width["top"]),
         ("bottom strip", hx, 0.0,               hw, width["bottom"]),
     ]
+    for nm, _, _, _, _ in placed[n * 2:]:
+        radii[nm] = (0.0, 0.0, 0.0, 0.0)
     if BORDER_MID_BAR:
         # Sits centred in the air gap between the two screens.
         gap_lo, gap_hi = gy1 + gh1, gy2           # 11in glass top, 6.25in bottom
         mid_w = (gap_hi - gap_lo) - 2 * BORDER_MID_CLEAR
         assert mid_w > 0, "no room for a mid bar between the two screens"
         placed.append(("mid bar", hx, gap_lo + BORDER_MID_CLEAR, hw, mid_w))
+        radii["mid bar"] = (0.0, 0.0, 0.0, 0.0)
         width["mid"] = mid_w
         avail["mid"] = gap_hi - gap_lo
         actual_clear["mid"] = (gap_hi - gap_lo - mid_w) / 2
@@ -681,7 +760,7 @@ def plan_border(pw, ph, g11rect, g62rect, holes, win11):
                 f"nested {nested[i][0]} overlaps {nested[j][0]}"
 
     return dict(width=width, capped=capped, avail=avail, placed=placed,
-                clear=actual_clear,
+                clear=actual_clear, radii=radii,
                 strip_holes=strip_holes, nested=nested, sheet=(pw, ph),
                 nest_used=used_w, nest_room=ww - 2 * marg)
 

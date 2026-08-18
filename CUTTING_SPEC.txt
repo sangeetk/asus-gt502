@@ -76,13 +76,13 @@ sheet extent stays 194.00 x 384.00, the panel size.
 Sizes below are as drawn. They bond flat to the BACK of the panel and are
 not visible in the finished build.
 
-   left strip A      17.00 W x  189.00 H   drawn at X 28.39, Y 32.81
+   left strip A      17.00 W x  192.00 H   drawn at X 28.39, Y 32.81
                    no holes
-   left strip B      17.00 W x  189.00 H   drawn at X 50.39, Y 32.81
+   left strip B      17.00 W x  192.00 H   drawn at X 50.39, Y 32.81
                    no holes
-   right strip A     11.00 W x  189.00 H   drawn at X 72.39, Y 32.81
+   right strip A     11.00 W x  192.00 H   drawn at X 72.39, Y 32.81
                    no holes
-   right strip B     11.00 W x  189.00 H   drawn at X 88.39, Y 32.81
+   right strip B     11.00 W x  192.00 H   drawn at X 88.39, Y 32.81
                    no holes
    top strip         24.50 W x  166.00 H   drawn at X 104.39, Y 32.81
                    hole at X 13.00, Y 46.00
