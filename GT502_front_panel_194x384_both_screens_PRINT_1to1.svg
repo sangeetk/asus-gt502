@@ -4,10 +4,10 @@
 <rect x="0.15" y="0.15" width="193.7" height="383.7" rx="3.0" fill="none" stroke="#000000" stroke-width="0.3"/>
 <rect x="23.390" y="27.815" width="153.220" height="241.670" rx="2.0" fill="none" stroke="#dc2626" stroke-width="0.5"/>
 <rect x="26.410" y="287.485" width="147.180" height="68.700" rx="2.0" fill="none" stroke="#dc2626" stroke-width="0.5"/>
-<circle cx="63.000" cy="371.000" r="1.600" fill="none" stroke="#dc2626" stroke-width="0.5"/>
-<circle cx="134.000" cy="371.000" r="1.600" fill="none" stroke="#dc2626" stroke-width="0.5"/>
-<circle cx="30.000" cy="16.000" r="1.600" fill="none" stroke="#dc2626" stroke-width="0.5"/>
-<circle cx="164.000" cy="16.000" r="1.600" fill="none" stroke="#dc2626" stroke-width="0.5"/>
+<circle cx="65.000" cy="371.000" r="1.600" fill="none" stroke="#dc2626" stroke-width="0.5"/>
+<circle cx="135.000" cy="371.000" r="1.600" fill="none" stroke="#dc2626" stroke-width="0.5"/>
+<circle cx="32.000" cy="17.000" r="1.600" fill="none" stroke="#dc2626" stroke-width="0.5"/>
+<circle cx="165.000" cy="17.000" r="1.600" fill="none" stroke="#dc2626" stroke-width="0.5"/>
 <rect x="17.390" y="21.815" width="165.220" height="253.670" fill="none" stroke="#2563eb" stroke-width="0.3" stroke-dasharray="3 2"/>
 <rect x="20.410" y="284.485" width="159.180" height="74.700" fill="none" stroke="#2563eb" stroke-width="0.3" stroke-dasharray="3 2"/>
 <rect x="22.990" y="30.415" width="148.020" height="236.470" fill="none" stroke="#16a34a" stroke-width="0.3" stroke-dasharray="1 1"/>

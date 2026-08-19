@@ -54,10 +54,10 @@ left and right margins are NOT equal. Please work to the X/Y
 coordinates above rather than centring anything.
 
 Mounting holes - 4 off, diameter 3.20 THROUGH
-   top left      X   63.00 , Y  371.00   (63.00 from left, 13.00 from top)
-   top right     X  134.00 , Y  371.00   (60.00 from right, 13.00 from top)
-   bottom left   X   30.00 , Y   16.00   (30.00 from left, 16.00 from bottom)
-   bottom right  X  164.00 , Y   16.00   (30.00 from right, 16.00 from bottom)
+   top left      X   65.00 , Y  371.00   (65.00 from left, 13.00 from top)
+   top right     X  135.00 , Y  371.00   (59.00 from right, 13.00 from top)
+   bottom left   X   32.00 , Y   17.00   (32.00 from left, 17.00 from bottom)
+   bottom right  X  165.00 , Y   17.00   (29.00 from right, 17.00 from bottom)
    All hole positions are to the CENTRE. They are NOT a symmetric pattern -
    please work to the coordinates as given.
 Aluminium remaining below lower window 27.81
@@ -112,14 +112,14 @@ finished build.
    TOP STRIP        bounding size 24.50 W x 160.00 H   drawn at X 106.39, Y 32.81
       shape: plain rectangle, square corners.
       NOTE: drawn rotated 90 deg from how it is fitted.
-      hole at X 13.00, Y 43.00
-      hole at X 13.00, Y 114.00
+      hole at X 13.00, Y 45.00
+      hole at X 13.00, Y 115.00
 
    BOTTOM STRIP     bounding size 21.50 W x 166.00 H   drawn at X 134.89, Y 32.81
       shape: plain rectangle, square corners.
       NOTE: drawn rotated 90 deg from how it is fitted.
-      hole at X 5.50, Y 13.00
-      hole at X 5.50, Y 147.00
+      hole at X 4.50, Y 15.00
+      hole at X 4.50, Y 148.00
 
    MID BAR          bounding size 8.50 W x 160.00 H   drawn at X 160.39, Y 32.81
       shape: plain rectangle, square corners.

@@ -568,6 +568,244 @@ def svg_1to1(path, pw, ph, cutouts, refs, notes, letters=(), holes=()):
         f.write("\n".join(s))
 
 
+
+# ------------------------------------------------------- A4 tiled 1:1 printout
+# The 1:1 SVG above is 194 x 384, which wants A3. This tiles the same drawing
+# across A4 sheets so it can be checked against the case with a home printer.
+#
+# A PDF rather than an SVG on purpose: "Actual size" in a PDF viewer is exact
+# and repeatable, whereas printing an SVG goes through a browser's own scaling
+# and is one wrong checkbox away from being 3 % out. 3 % of 384 mm is 11 mm.
+PT = 72 / 25.4              # PDF points per mm
+A4 = (210.0, 297.0)
+# 1 column x 2 rows: the panel is 194 wide, so a whole half of it fits across
+# an A4 sheet with 8 mm to spare each side - inside the ~4.2 mm a laser printer
+# cannot reach, but only just. Set TILE_GRID to None to let the script work the
+# grid out for itself, which is safer on an unknown printer but gives 4 sheets.
+TILE_GRID = (1, 2)          # (columns, rows) of A4 sheets, or None for auto
+TILE_MARGIN = 10.0          # unprinted edge to aim for
+TILE_EDGE = 4.5             # unprinted edge the printer physically needs
+TILE_BLEED = 5.0            # extra drawing past the trim line, for overlapping
+CIRC_K = 0.5522847498       # bezier constant for a circle quadrant
+
+
+class Pdf:
+    """Minimal multi-page PDF writer. Millimetres in, points out."""
+
+    def __init__(self, page=A4):
+        self.page = page
+        self.pages = []
+        self.buf = []
+
+    # --- drawing, all in mm with the origin at the sheet's lower-left
+    def _xy(self, x, y):
+        return f"{x * PT:.3f} {y * PT:.3f}"
+
+    def gsave(self):
+        self.buf.append("q")
+
+    def grestore(self):
+        self.buf.append("Q")
+
+    def clip(self, x, y, w, h):
+        self.buf.append(f"{self._xy(x, y)} {w * PT:.3f} {h * PT:.3f} re W n")
+
+    def translate(self, dx, dy):
+        self.buf.append(f"1 0 0 1 {dx * PT:.3f} {dy * PT:.3f} cm")
+
+    def style(self, rgb=(0, 0, 0), width=0.25, dash=None):
+        r, g, b = rgb
+        self.buf.append(f"{r:.2f} {g:.2f} {b:.2f} RG {width * PT:.3f} w")
+        self.buf.append(f"[{' '.join(f'{d * PT:.2f}' for d in dash)}] 0 d"
+                        if dash else "[] 0 d")
+
+    def line(self, x0, y0, x1, y1):
+        self.buf.append(f"{self._xy(x0, y0)} m {self._xy(x1, y1)} l S")
+
+    def rect(self, x, y, w, h):
+        self.buf.append(f"{self._xy(x, y)} {w * PT:.3f} {h * PT:.3f} re S")
+
+    def rounded_rect(self, x, y, w, h, r):
+        k = r * CIRC_K
+        b = self.buf
+        b.append(f"{self._xy(x + r, y)} m")
+        b.append(f"{self._xy(x + w - r, y)} l")
+        b.append(f"{self._xy(x + w - r + k, y)} {self._xy(x + w, y + r - k)} "
+                 f"{self._xy(x + w, y + r)} c")
+        b.append(f"{self._xy(x + w, y + h - r)} l")
+        b.append(f"{self._xy(x + w, y + h - r + k)} {self._xy(x + w - r + k, y + h)} "
+                 f"{self._xy(x + w - r, y + h)} c")
+        b.append(f"{self._xy(x + r, y + h)} l")
+        b.append(f"{self._xy(x + r - k, y + h)} {self._xy(x, y + h - r + k)} "
+                 f"{self._xy(x, y + h - r)} c")
+        b.append(f"{self._xy(x, y + r)} l")
+        b.append(f"{self._xy(x, y + r - k)} {self._xy(x + r - k, y)} "
+                 f"{self._xy(x + r, y)} c")
+        b.append("S")
+
+    def circle(self, cx, cy, r):
+        k = r * CIRC_K
+        b = self.buf
+        b.append(f"{self._xy(cx + r, cy)} m")
+        b.append(f"{self._xy(cx + r, cy + k)} {self._xy(cx + k, cy + r)} "
+                 f"{self._xy(cx, cy + r)} c")
+        b.append(f"{self._xy(cx - k, cy + r)} {self._xy(cx - r, cy + k)} "
+                 f"{self._xy(cx - r, cy)} c")
+        b.append(f"{self._xy(cx - r, cy - k)} {self._xy(cx - k, cy - r)} "
+                 f"{self._xy(cx, cy - r)} c")
+        b.append(f"{self._xy(cx + k, cy - r)} {self._xy(cx + r, cy - k)} "
+                 f"{self._xy(cx + r, cy)} c")
+        b.append("S")
+
+    def polygon(self, pts):
+        b = self.buf
+        b.append(f"{self._xy(*pts[0])} m")
+        for x, y in pts[1:]:
+            b.append(f"{self._xy(x, y)} l")
+        b.append("h S")
+
+    def text(self, x, y, s, size=8, rgb=(0, 0, 0)):
+        s = s.replace("\\", r"\\").replace("(", r"\(").replace(")", r"\)")
+        r, g, b = rgb
+        self.buf.append(f"BT {r:.2f} {g:.2f} {b:.2f} rg /F1 {size:.1f} Tf "
+                        f"{self._xy(x, y)} Td ({s}) Tj ET")
+
+    def endpage(self):
+        self.pages.append("\n".join(self.buf))
+        self.buf = []
+
+    def dumps(self):
+        objs = []                              # 1 catalog, 2 pages, 3 font
+        n_pages = len(self.pages)
+        kids = " ".join(f"{4 + 2 * i} 0 R" for i in range(n_pages))
+        objs.append("<< /Type /Catalog /Pages 2 0 R >>")
+        objs.append(f"<< /Type /Pages /Kids [{kids}] /Count {n_pages} >>")
+        objs.append("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica "
+                    "/Encoding /WinAnsiEncoding >>")
+        w, h = self.page[0] * PT, self.page[1] * PT
+        for i, content in enumerate(self.pages):
+            objs.append(f"<< /Type /Page /Parent 2 0 R /MediaBox "
+                        f"[0 0 {w:.3f} {h:.3f}] /Resources << /Font "
+                        f"<< /F1 3 0 R >> >> /Contents {5 + 2 * i} 0 R >>")
+            objs.append(f"<< /Length {len(content)} >>\nstream\n{content}\nendstream")
+
+        out, offsets = "%PDF-1.4\n", []
+        for i, o in enumerate(objs, start=1):
+            offsets.append(len(out))
+            out += f"{i} 0 obj\n{o}\nendobj\n"
+        start = len(out)
+        out += f"xref\n0 {len(objs) + 1}\n0000000000 65535 f \n"
+        out += "".join(f"{o:010d} 00000 n \n" for o in offsets)
+        out += (f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\n"
+                f"startxref\n{start}\n%%EOF\n")
+        return out
+
+
+def write_a4_tiles(path, b, cutouts, refs, holes):
+    """The 1:1 drawing tiled across A4 sheets - by default, half the panel each.
+
+    Every sheet carries the trim line it must be cut on, a 100 mm scale bar to
+    prove the printer did not scale anything, and edge ticks labelled in PANEL
+    coordinates - so a hole can be checked against the case by measuring from
+    the sheet edge, without trusting the assembly of the sheets at all.
+    """
+    pw, ph = b["panel"]
+    cols, rows = TILE_GRID or (
+        math.ceil(pw / (A4[0] - 2 * TILE_MARGIN - 2 * TILE_BLEED)),
+        math.ceil(ph / (A4[1] - 2 * TILE_MARGIN - 2 * TILE_BLEED)))
+    tw, th = pw / cols, ph / rows
+    ox, oy = (A4[0] - tw) / 2, (A4[1] - th) / 2      # tile origin on the sheet
+    # Bleed is whatever is left once the sheet's own unprintable edge is taken
+    # out, so a tile that fills the sheet loses its bleed instead of losing its
+    # trim line off the edge of the paper.
+    bx = min(TILE_BLEED, ox - TILE_EDGE)
+    by = min(TILE_BLEED, oy - TILE_EDGE)
+    assert bx >= 0 and by >= 0, (
+        f"a {tw:.1f} x {th:.1f} tile does not fit an A4 sheet with {TILE_EDGE} "
+        "mm printable margin - use a finer TILE_GRID")
+    inside = ox < 20.0                               # no room for edge labels
+
+    pdf = Pdf()
+    for row in reversed(range(rows)):                # top row printed first
+        for col in range(cols):
+            x0, y0 = col * tw, row * th              # panel coords of this tile
+            name = f"row {rows - row} of {rows}, column {col + 1} of {cols}"
+
+            pdf.gsave()
+            pdf.clip(ox - bx, oy - by, tw + 2 * bx, th + 2 * by)
+            pdf.translate(ox - x0, oy - y0)          # panel space -> sheet space
+
+            pdf.style((0, 0, 0), 0.35)
+            pdf.rounded_rect(0, 0, pw, ph, PANEL_CORNER_R)
+            pdf.style((0.86, 0.15, 0.15), 0.35)
+            for x, y, w, h, r in cutouts:
+                pdf.rounded_rect(x, y, w, h, r)
+            for hx, hy, hd in holes:
+                pdf.circle(hx, hy, hd / 2)
+                pdf.style((0.86, 0.15, 0.15), 0.15)
+                pdf.line(hx - 4, hy, hx + 4, hy)     # crosshair through centre
+                pdf.line(hx, hy - 4, hx, hy + 4)
+                pdf.style((0.86, 0.15, 0.15), 0.35)
+            for x, y, w, h, colour, dash in refs:
+                rgb = ((0.15, 0.39, 0.92) if colour == "#2563eb"
+                       else (0.09, 0.64, 0.29))
+                pdf.style(rgb, 0.2, [float(d) for d in dash.split()])
+                pdf.rect(x, y, w, h)
+            pdf.style((0, 0, 0), 0.2)
+            for hx, hy, hd in holes:                 # label every hole
+                pdf.text(hx + 3, hy + 3, f"X {hx:.2f}  Y {hy:.2f}", 5)
+            pdf.grestore()
+
+            # trim line and registration crosses, in sheet space
+            pdf.style((0, 0, 0), 0.25, [2.0, 1.5])
+            pdf.rect(ox, oy, tw, th)
+            pdf.style((0, 0, 0), 0.25)
+            for cx, cy in ((ox, oy), (ox + tw, oy), (ox, oy + th),
+                           (ox + tw, oy + th)):
+                pdf.line(cx - 4, cy, cx + 4, cy)
+                pdf.line(cx, cy - 4, cx, cy + 4)
+            # Ticks on the PANEL's own 10 mm grid, not on the tile's edge, so
+            # they line up across a seam and can be measured against.
+            x = math.ceil(x0 / 10) * 10
+            while x <= x0 + tw + 1e-6:
+                pdf.line(ox + x - x0, oy, ox + x - x0, oy - (5 if x % 50 else 8))
+                if x % 50 == 0:
+                    pdf.text(ox + x - x0 + 1, oy - 12, f"X {x:.0f}", 5)
+                x += 10
+            y = math.ceil(y0 / 10) * 10
+            side = 1 if inside else -1                   # tick inwards if tight
+            while y <= y0 + th + 1e-6:
+                pdf.line(ox, oy + y - y0,
+                         ox + side * (5 if y % 50 else 8), oy + y - y0)
+                if y % 50 == 0:
+                    pdf.text(ox + (10 if inside else -17), oy + y - y0 + 1,
+                             f"Y {y:.0f}", 5)
+                y += 10
+
+            # scale bar and instructions
+            bx, by = ox, oy + th + 8
+            pdf.style((0, 0, 0), 0.4)
+            pdf.line(bx, by, bx + 100, by)
+            pdf.line(bx, by - 1.5, bx, by + 1.5)
+            pdf.line(bx + 100, by - 1.5, bx + 100, by + 1.5)
+            pdf.text(bx, by + 3, "100 mm - MEASURE THIS FIRST. If it is not "
+                                 "100.0 mm the print is scaled.", 7)
+            pdf.text(bx, by - 6, f"GT502 front panel, 1:1 - sheet {name}."
+                                 f"  Panel X {x0:.1f}-{x0 + tw:.1f}, "
+                                 f"Y {y0:.1f}-{y0 + th:.1f} of {pw:.0f} x {ph:.0f}.",
+                     7)
+            pdf.text(ox, oy - 19,
+                     "Print at 100% / Actual size - never Fit to page. Cut on "
+                     "the dashed line, butt the sheets, tape on the back.", 7)
+            pdf.text(ox, oy - 25,
+                     "Red = cut line.  Blue dashed = screen glass.  "
+                     "Green dashed = active area.  Crosshairs = hole centres.", 7)
+            pdf.endpage()
+
+    with open(path, "w") as f:
+        f.write(pdf.dumps())
+    return cols * rows, tw, th
+
 # --------------------------------------------------------------------- builders
 def cutout_from(screen, insets):
     """insets = (left, right, bottom, top) -> (w, h) of the cutout."""
@@ -599,10 +837,18 @@ HOLE_DIA = 3.2
 # These are measured off the cut sheet and are deliberately not a symmetric
 # pattern - keep them as independent values, do not "tidy" them into a formula.
 MOUNT_HOLES = [
-    (("left",  63.0), ("top",    13.0)),   # top left
-    (("right", 60.0), ("top",    13.0)),   # top right
-    (("left",  30.0), ("bottom", 16.0)),   # bottom left
-    (("right", 30.0), ("bottom", 16.0)),   # bottom right
+    # Top pair moved right off the 1:1 A4 check print against the case:
+    # top left +2.0 (63 -> 65), top right +1.0 (134 -> 135, i.e. 60 -> 59 from
+    # the right edge). Different corrections, so the top pitch closes from
+    # 71.00 to 70.00 - they are two independent measurements, not a pattern.
+    (("left",  65.0), ("top",    13.0)),   # top left
+    (("right", 59.0), ("top",    13.0)),   # top right
+    # Bottom pair corrected off the same check print: bottom left +2.0 right
+    # and +1.0 up (30, 16 -> 32, 17), bottom right +1.0 right and +1.0 up
+    # (164, 16 -> 165, 17, i.e. 30 -> 29 from the right edge). Bottom pitch
+    # closes 134.00 -> 133.00, and both holes move 1 mm nearer the 11in glass.
+    (("left",  32.0), ("bottom", 17.0)),   # bottom left
+    (("right", 29.0), ("bottom", 17.0)),   # bottom right
 ]
 HOLE_NAMES = ("top left", "top right", "bottom left", "bottom right")
 
@@ -783,6 +1029,9 @@ def build_both(out_dxf, out_svg, out_print, panel_h=None, cut_gap=5.0,
         ghosts=[(sx, sy, bd["profiles"][n]) if False else
                 (sx, sy, bd["assembled"][n]) for n, sx, sy, sw, sh in bd["placed"]],
         canvas=bd["sheet"])
+
+    write_a4_tiles(out_print.replace("_PRINT_1to1.svg", "_PRINT_A4_tiles.pdf"),
+                   dict(panel=(PANEL_W, ph)), cutouts, refs, svg_holes)
 
     svg_1to1(out_print, PANEL_W, ph, cutouts, refs, [
         f"GT502 front panel, 3 mm aluminium - {PANEL_W:.0f} x {ph:.0f} mm",

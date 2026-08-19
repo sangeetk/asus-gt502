@@ -52,14 +52,24 @@ first cut sheet. Left and right margins are *not* equal; work to coordinates.
 
 | Hole | X, Y | As measured |
 | --- | --- | --- |
-| top left | 63.00, 371.00 | 63 from left, 13 from top |
-| top right | 134.00, 371.00 | 60 from right, 13 from top |
-| bottom left | 30.00, 16.00 | 30 from left, 16 from bottom |
-| bottom right | 164.00, 16.00 | 30 from right, 16 from bottom |
+| top left | 65.00, 371.00 | 65 from left, 13 from top |
+| top right | 135.00, 371.00 | 59 from right, 13 from top |
+| bottom left | 32.00, 17.00 | 32 from left, 17 from bottom |
+| bottom right | 165.00, 17.00 | 29 from right, 17 from bottom |
 
-All to hole **centre**. Not a symmetric pattern: the top pair is 71.00 apart and
-1.5 mm off-centre, the bottom pair 134.00 apart and centred. These came off the
-case, so they are correct as given rather than tidy.
+All to hole **centre**. Not a symmetric pattern: the top pair is 70.00 apart and
+3.0 mm off-centre, the bottom pair 133.00 apart and 1.5 mm off-centre. These
+came off the case, so they are correct as given rather than tidy.
+
+**All four moved off the A4 1:1 check prints held against the case.** Top left
++2.00 right, top right +1.00 right; bottom left +2.00 right and +1.00 up, bottom
+right +1.00 right and +1.00 up. Each pair's two corrections differ, so both
+pitches closed — top 71.00 → 70.00, bottom 134.00 → 133.00 — and neither pair is
+symmetric about the sheet any more. That is what four independent measurements
+against the real case give you; it is not a pattern being nudged.
+
+Both bottom holes are now **1 mm nearer the 11″ glass**, which is the one
+clearance these moves eat into — see "Assembly notes".
 
 > **Open item — hole diameter is an assumption.** Ø3.20 is M3 clearance,
 > chosen because no fastener was specified. Confirm before cutting; holes are
@@ -173,8 +183,8 @@ both layers. Offsets are from each piece's own lower-left corner **as drawn**:
 
 | Piece | Holes | Pitch |
 | --- | --- | --- |
-| top strip | (13.00, 43.00) and (13.00, 114.00) | 71.00 |
-| bottom strip | (5.50, 13.00) and (5.50, 147.00) | 134.00 |
+| top strip | (13.00, 45.00) and (13.00, 115.00) | 70.00 |
+| bottom strip | (4.50, 15.00) and (4.50, 148.00) | 133.00 |
 
 Those pitches match the panel's top and bottom hole pitches exactly. The four
 side pieces have no holes.
@@ -282,8 +292,9 @@ Everything bonds to the **back** face, which must be flat and deburred. The
 order matters, because several pieces are datums for the ones after them and
 six clearances are under 0.5 mm.
 
-1. **Fit the two bottom screws first.** Those holes sit 4.21 mm from the 11″
-   glass edge; an M3 head (~6 mm OD) leaves 2.82 mm and a washer (~7 mm) 2.32.
+1. **Fit the two bottom screws first.** Those holes sit 3.21 mm from the 11″
+   glass edge — 1 mm tighter since they moved up; an M3 head (~6 mm OD) leaves
+   1.81 mm and a washer (~7 mm) 1.31.
    It fits, but not with a screwdriver in the way once the screen is on.
    Anything with a flange over ~11 mm OD will touch the glass.
 2. **Bond the 11″ screen**, centred in its window. Everything else is measured
@@ -373,6 +384,11 @@ substitute a normal font.
   gap beside the 6.25″ screen from 3.41 to 0.41. Added the mid bar. Top strip
   widened to 24.50 and bottom to 21.50 so both screens are captured. All cut
   geometry unified to one colour on two kerf-side layers.
-- **v5 (current)** — two name pieces nested in the 6.25″ window slug; the Hunab
-  Ku keyring and the "ginger" lettering nested in what was left of the 11″
-  window slug. 12 parts off one sheet, still 194 × 384.
+- **v5** — two name pieces nested in the 6.25″ window slug; the Hunab Ku
+  keyring and the "ginger" lettering nested in what was left of the 11″ window
+  slug. 12 parts off one sheet, still 194 × 384.
+- **v6 (current)** — all four mounting holes corrected off the A4 1:1 check
+  prints against the case: top left +2.00 right, top right +1.00 right, bottom
+  left +2.00 right and +1.00 up, bottom right +1.00 right and +1.00 up. Top
+  pitch 71.00 → 70.00, bottom 134.00 → 133.00. Both stiffener strips' holes
+  follow automatically, since they are derived from the panel's.
